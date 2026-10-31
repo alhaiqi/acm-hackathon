@@ -29,3 +29,13 @@ Times are UTC (Beirut = UTC+2). Newest entry at the bottom. Questions for Mohamm
   home. Note: r003 stopped by early stopping (27 ep, 1.6 min), so its 8-min time limit is irrelevant.
 - Decision: P2 code drafted + CPU-tested meanwhile (receipt OK), NOT committed until P1's GPU run is done,
   to keep "each feature fully finished before the next" in commit order.
+- 18:58 SEEDS: m-eurosat r003 config (SSL4EO R50, 128 px) over 3 seeds = 0.988 / 0.985 / 0.988 ->
+  mean 0.987 +- 0.0017 SD (VALID). Isolated home; finalized runs untouched.
+- 19:12 P1 DATA ADVISOR real GPU run on m-eurosat (12.2 min): learning curve 0.941/0.964/0.978/0.984 at
+  10/25/50/100% (power law r2 0.995); 2x labels -> +0.56 pts [+0.30, +0.84] (~35% of remaining error).
+  Label doctor recovered 40/40 injected flips in its top 80; 57 natural suspects (2.9% of TRAIN).
+  Labeling queue: +100 uncertain vs +100 random = +0.60 pts [-0.10, +1.30], p 0.15 (NOT significant).
+- Decision: the first verdict text ("not distinguishable from zero") was wrong for a CI of [+0.30, +0.84];
+  rewrote the verdict relative to the remaining error ("Both, cheapest first") and regenerated SUMMARY.md
+  from the saved results (no retraining). Outputs copied to docs/advisor/m-eurosat/.
+- 19:20 Smoke test after P1: AGENT LOOP OK, store layout OK, ENGINE OK, EXTRAS OK. P1 DONE.

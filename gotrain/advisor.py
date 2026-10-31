@@ -290,14 +290,21 @@ def summary(rep) -> str:
     rows = "\n".join(f"| {int(c['fraction'] * 100)}% | {c['n_train']} | {c['val_acc']:.4f} | "
                      f"[{c['ci95'][0]:.4f}, {c['ci95'][1]:.4f}] |" for c in rep["curve"])
     fit_ok = lc["power_law"]["r2"] >= 0.9 and lc["monotonic"]
+    err_now = (1 - rep["curve"][-1]["val_acc"]) * 100                 # remaining error at 100%, in points
+    share = g / err_now if err_now > 0 else 0.0                        # fraction of remaining errors 2x labels removes
+    sus = ld["natural_suspect_rate"] * 100
     if not fit_ok:
         verdict = ("**Inconclusive.** The learning curve does not follow a power law, so the 2x-label estimate is not "
                    "trustworthy; decide from the label doctor and the model comparisons instead.")
-    elif glo > 0.5:
-        verdict = "**Data.** Doubling the labels is expected to add a clearly positive amount (lower bound > 0.5 pts)."
+    elif glo <= 0:
+        verdict = ("**Model, not more labels.** The gain from 2x labels is not distinguishable from zero "
+                   f"({g:+.2f} pts [{glo:+.2f}, {ghi:+.2f}]); model choices and label quality are the better levers.")
     else:
-        verdict = ("**Model, not more of the same labels.** The 2x-label gain is small or not distinguishable from "
-                   "zero; label quality and model choices are the better levers.")
+        verdict = (f"**Both, cheapest first.** 2x labels gives a real but small gain: {g:+.2f} pts [{glo:+.2f}, {ghi:+.2f}], "
+                   f"i.e. it removes ~{share:.0%} of the remaining {err_now:.1f}% error at the cost of "
+                   f"{rep['n_train']} new labels. Cheaper first: re-check the {ld['natural_suspects']} suspicious labels "
+                   f"({sus:.1f}% of TRAIN, `label_doctor.html`), then the model side (seed noise and the agent's model "
+                   "search, slides 2d/3).")
     weak = []
     if lc["power_law"]["r2"] < 0.9 or not lc["monotonic"]:
         weak.append(f"the power-law fit is weak (r2 {lc['power_law']['r2']:.2f}, monotonic {lc['monotonic']}): "
