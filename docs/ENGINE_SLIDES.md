@@ -148,8 +148,29 @@ Data is read once into numpy memmaps (`data.build_cache`), so the GPU is not wai
   from the live state (`scripts/strands_mcp_agent.py`).
 - **Model registry**: versions with stage (candidate -> staging -> production), lineage (parent run),
   val/test scores, ensemble membership; `pull_model` fetches a version for inference elsewhere.
-- **S3**: same layout as the local store; one-command migration ready (`scripts/migrate_store_to_s3.sh`),
-  waiting for the team bucket from RASID.
+- **S3**: the local store is laid out as the bucket (next slide); switching is one env var.
+
+---
+
+## 11. Storage: the local store IS the S3 layout
+
+**Rule: path under `$GOTRAIN_HOME/store/` = S3 key under `s3://<bucket>/<prefix>/`.**
+Switch to S3 with one variable: `GOTRAIN_S3_BUCKET` (prefix optional). No code change.
+
+```
+store/                                   -> s3://<bucket>/<prefix>/
+├── datasets/m-eurosat/                  train/valid arrays + meta + train stats (test never exported)
+└── models/
+    ├── m-eurosat/registry.json          v1-v3 production (ensemble), v4 staging; files listed by KEY
+    │   └── v1..v4/ model.pt config.json metrics.json history.jsonl train.log
+    └── m-pv4ger-seg/registry.json       v1 production
+        └── v1/ ...
+```
+
+Real store on SageMaker: 33 files, `scripts/check_store_layout.py` -> **LAYOUT OK** (every file printed
+with its S3 key). The check caught two real problems first, both fixed:
+test arrays had been exported into the store, and `registry.json` listed absolute local paths
+instead of keys. When a bucket exists: `scripts/migrate_store_to_s3.sh` (copy + read-back check).
 
 ---
 
@@ -158,4 +179,4 @@ Data is read once into numpy memmaps (`data.build_cache`), so the GPU is not wai
 - [ ] Day-2 results: m-brick-kiln, m-chesapeake (overnight, `scripts/launch_overnight.sh`, after B6)
 - [ ] m-nz-cattle result (running), label it noisy
 - [ ] GEO-Bench paper baselines per task (look up, cite)
-- [ ] S3 bucket from RASID, then run the migration and update slide 10
+- [x] S3: organisers want the local layout only (slide 11); no bucket needed
