@@ -21,7 +21,9 @@ git pull -q && git log --oneline -1 | cat
 pip install -q -r requirements.txt >/dev/null 2>&1
 
 echo "[$(date +%T)] smoke test (must pass before any test split is spent)"
-if ! bash scripts/smoke_test.sh | tee /tmp/overnight_smoke.txt | grep -q "ENGINE OK"; then
+# write to a file first: "| grep -q" closes the pipe early, tee gets SIGPIPE and pipefail reports a false failure
+bash scripts/smoke_test.sh > /tmp/overnight_smoke.txt 2>&1
+if ! grep -q "ENGINE OK" /tmp/overnight_smoke.txt; then
     echo "SMOKE TEST FAILED - not launching"; cat /tmp/overnight_smoke.txt; exit 1
 fi
 grep -q "AGENT LOOP OK" /tmp/overnight_smoke.txt || { echo "AGENT LOOP FAILED - not launching"; exit 1; }
