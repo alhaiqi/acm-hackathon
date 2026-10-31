@@ -17,3 +17,7 @@ Times are UTC (Beirut = UTC+2). Newest entry at the bottom. Questions for Mohamm
   P1 code written + CPU test passes on Windows (not committed: waits for the Linux smoke test before/after).
 - Decision: Linux smoke test runs in WSL on this laptop (venv on D:), not on SageMaker, so the running
   experiment gets the GPU/CPU to itself. Reason: your rule "don't disturb it".
+- 17:50 WSL Linux test env ready on D: (fixed a torchvision/torch CPU mismatch). Smoke test BEFORE P1
+  (clean checkout 9cbfb8d): AGENT LOOP OK, store layout OK, ENGINE OK. AFTER P1: same + EXTRAS OK.
+- 17:50 P1 code committed (CPU-tested on fake data; numbers there are meaningless by design). The real
+  GPU run on m-eurosat waits for the experiment to free the GPU.
