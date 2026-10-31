@@ -126,6 +126,29 @@ p = 1.0, 0.77, 0.34, 0.21 -> **the top 5 runs are statistically tied**.
 
 Message: "+0.2 points" that other teams would report as progress is noise here; we can say which gains are real.
 
+**Seed noise, measured** (m-eurosat, chosen config r003 = SSL4EO ResNet50 @128 px, retrained with 2 more seeds,
+VALID only, isolated home): 0.988 / 0.985 / 0.988 -> **mean 0.987 +- 0.0017 SD**. The 0.003 spread between
+seeds is the same size as the gaps between the top runs: another reason those runs are a tie.
+
+---
+
+## 3b. Data Advisor: model or data? (m-eurosat, real GPU run, 12 min, VALID only)
+
+Config of the best run (r003), equal compute per point (960 optimizer steps), nested subsets of TRAIN:
+
+| TRAIN used | 200 (10%) | 500 (25%) | 1000 (50%) | 2000 (100%) |
+|---|---|---|---|---|
+| VALID acc | 0.941 | 0.964 | 0.978 | 0.984 |
+
+- Power law on the error fits (r2 0.995). **2x labels -> +0.56 pts [+0.30, +0.84]**: real, and ~35% of the remaining
+  1.6% error, but it costs 2000 new labels.
+- **Label doctor** (2-fold out-of-fold on TRAIN): 40 labels flipped on purpose -> it found **all 40** in its top 80.
+  57 natural suspects (2.9% of TRAIN) in a thumbnail gallery: the cheapest thing to fix first.
+- **Labeling queue** (most uncertain first): +100 uncertain vs +100 random -> +0.60 pts [-0.10, +1.30], **p 0.15:
+  not significant** - honest result: uncertainty sampling did not clearly beat random here.
+- Verdict: both, cheapest first: re-check the 57 suspects, then labels/model. Exposed to GoPilot via MCP
+  (`data_advisor_report`), not to the training agent. Outputs: `docs/advisor/m-eurosat/` on branch feature/extras.
+
 ---
 
 ## 4. Pretraining that matches the sensor wins
