@@ -1,0 +1,9 @@
+geobench
+strands-agents
+torch
+timm
+segmentation-models-pytorch
+scikit-learn
+boto3
+huggingface_hub
+mcp

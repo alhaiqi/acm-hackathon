@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+gotrain_home/
+*.npy
+*.pt
+.ipynb_checkpoints/
