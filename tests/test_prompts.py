@@ -4,7 +4,8 @@ improvises instead). Checked here, without Bedrock:
 - every snake_case name in the system, task and resume prompts is a real tool, a tool argument, a
   training config key or a metrics field;
 - every tool named with "(" in the strategy tools' hints ("next", "first") is a real tool;
-- the method names the stages in order, and the noise rule is a hard rule;
+- the method names the stages in order (data, then papers, then the assumptions, then the shortlist), and
+  the noise rule is a hard rule; with the arXiv tool off no literature text is left behind;
 - the resume prompt points back to the tournament state and keeps valid-only mode free of finalize.
 
     python tests/test_prompts.py
@@ -28,11 +29,15 @@ def main():
     args = {p for f in tools.ALL_TOOLS for p in inspect.signature(f).parameters}
 
     # 1. prompts only name things that exist
-    texts = {"system": prompts.SYSTEM_PROMPT, "task": prompts.task_prompt("m-eurosat", 90),
+    texts = {"system": prompts.build_system_prompt(True), "system_no_arxiv": prompts.build_system_prompt(False),
+             "task": prompts.task_prompt("m-eurosat", 90),
              "resume": prompts.resume_prompt("m-eurosat", 30), "resume_valid": prompts.resume_prompt("m-eurosat", 30, True)}
     for k, t in texts.items():
         unknown = set(re.findall(SNAKE, t)) - names - args - set(DEFAULTS) - METRICS_FIELDS
         assert not unknown, (k, sorted(unknown))
+        assert "<<" not in t, k                                  # every literature placeholder filled
+    off = texts["system_no_arxiv"]
+    assert "search_papers" not in off and "paper" not in off.lower()     # GOTRAIN_ARXIV=0: no dangling step
 
     # 2. the strategy hints only call real tools
     src = Path(inspect.getsourcefile(strategy)).read_text(encoding="utf-8")
@@ -41,8 +46,9 @@ def main():
     assert called and called <= names, sorted(called - names)
 
     # 3. the method in order, and the noise rule
-    s = prompts.SYSTEM_PROMPT
-    order = ["inspect_dataset", "quick_probe", "propose_candidates", "submit_shortlist", "race_decision",
+    s = texts["system"]
+    order = ["inspect_dataset", "quick_probe", "search_papers", "COMPETING ASSUMPTIONS", "propose_candidates",
+             "submit_shortlist", "search_hf_models", "race_decision",
              "branch_status", "compare_runs", "finalize_task"]
     method = s[s.index("METHOD"):]
     pos = [method.index(t) for t in order[:-1]] + [method.rindex("finalize_task")]
