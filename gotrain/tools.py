@@ -339,3 +339,6 @@ ALL_TOOLS = [list_tasks, download_task, inspect_dataset, quick_probe, training_o
 
 from gotrain.strategy import ALL_STRATEGY_TOOLS  # noqa: E402  (Brain side: tournament, noise rule, branches)
 ALL_TOOLS += ALL_STRATEGY_TOOLS
+
+from gotrain.hub import ALL_HUB_TOOLS  # noqa: E402  (Hugging Face model discovery, with a leakage guard)
+ALL_TOOLS += ALL_HUB_TOOLS
