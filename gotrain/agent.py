@@ -113,7 +113,8 @@ def run_task(task: str, budget_min: float, session_dir, model=None, valid_only: 
                 attempt += 1
             agent = make_agent(logger, model, _session(task, session_dir, attempt))
         resumes += 1
-        if done() or left() < 4 or resumes > 25:
+        # normal mode keeps ~4 min for finalize; a valid-only experiment uses the whole budget (as its baseline does)
+        if done() or left() < (1 if valid_only else 4) or resumes > 25:
             break
         prompt = (f"You have {left():.0f} minutes left for {task}. Read read_journal and leaderboard, then "
                   + ("continue the search (validation only, no finalize)." if valid_only else
