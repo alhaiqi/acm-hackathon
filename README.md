@@ -116,9 +116,13 @@ one-command path: copy the store, verify the registry reads back from S3, then k
 ## Repository
 
 ```
-gotrain/agent.py        Strands agent, budget loop, tool-call logging, resume on errors
+gotrain/agent.py        Strands agent, budget loop, session resume (FileSessionManager), structured final report
+gotrain/guards.py       Strands hooks: one task per session, test lock, budget; tool-call log
 gotrain/prompts.py      system prompt: rules + search method
-gotrain/tools.py        the 19 tools (shared by Strands and MCP)
+gotrain/tools.py        all 26 tools (shared by Strands and MCP): 19 core + 5 strategy + 2 hub
+gotrain/strategy.py     model tournament, noise rule, branches (5 tools)
+gotrain/stats.py        bootstrap CIs, paired tests, noise floor on VALID predictions
+gotrain/hub.py          Hugging Face Hub model search with a GEO-Bench leakage guard (2 tools)
 gotrain/probe.py        random-forest probe: score floor, band importance, spectral vs spatial
 gotrain/train.py        one training run (classification, multi-label, segmentation)
 gotrain/finalize.py     test evaluation, once per task
