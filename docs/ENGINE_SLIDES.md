@@ -31,11 +31,15 @@ val_preds.npz, history.jsonl` (WORK_SPLIT.md section 1).
 |---|---|---|---|---|---|---|
 | m-eurosat | accuracy | **0.979** | 0.987 | ensemble of 3 SSL4EO ResNet50 @128 px | 7 | `results/m-eurosat.json` |
 | m-pv4ger-seg | mIoU | **0.9556** | 0.9616 | U-Net + ConvNeXt-tiny, 8-way TTA | 5 | `results/m-pv4ger-seg.json` |
-| m-nz-cattle (extra) | mIoU | *running* | | | | label as noisy: 66 val images |
+| m-nz-cattle (extra) | mIoU | **0.857** ⚠ noisy | 0.860 | U-Net + ConvNeXt-tiny, 640 px, TTA | 5 | `results/m-nz-cattle.json` |
 | m-brick-kiln | accuracy | *day 2* | | | | test untouched |
 | m-chesapeake | mIoU | *day 2* | | | | test untouched |
 
 pv4ger-seg per-class test IoU: no solar 0.984, **solar panels 0.927**.
+
+⚠ m-nz-cattle is noisy: only 66 val / 65 test images. Val 95% CI [0.852, 0.867] (bootstrap over images);
+cattle IoU on test 0.722 (2% of pixels). The paired tests vs the other runs are significant (p 0.001), but
+they only measure image sampling on these 66 images, not seed-to-seed training noise (one seed per config).
 
 Honest note for the eurosat ensemble: its val (0.987) was below the best single run (0.988) and its test
 (0.979) below two of its members alone (0.981, 0.982). The agent's own reason was "near-tie within noise;
@@ -177,6 +181,6 @@ instead of keys. When a bucket exists: `scripts/migrate_store_to_s3.sh` (copy + 
 ## Open before the presentation
 
 - [ ] Day-2 results: m-brick-kiln, m-chesapeake (overnight, `scripts/launch_overnight.sh`, after B6)
-- [ ] m-nz-cattle result (running), label it noisy
+- [x] m-nz-cattle result: test 0.857 mIoU, labelled noisy
 - [ ] GEO-Bench paper baselines per task (look up, cite)
 - [x] S3: organisers want the local layout only (slide 11); no bucket needed
