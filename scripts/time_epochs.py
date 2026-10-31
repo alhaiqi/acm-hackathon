@@ -4,7 +4,7 @@
     python scripts/time_epochs.py m-eurosat --config '{"backbone": "resnet50", "img_size": 128}'
 
 Runs 3 epochs per task (a normal run: it shows up on the leaderboard as "timing run") and writes
-results/timing.json: {task: {sec_per_epoch, min_for_<E>_epochs, ...}}. Share that file with the Brain side.
+timing.json (in GOTRAIN_HOME, not results/: the report reads every results/*.json as a final score): {task: {sec_per_epoch, min_for_<E>_epochs, ...}}. Share that file with the Brain side.
 """
 import sys as _sys, pathlib as _pl; _sys.path.insert(0, str(_pl.Path(__file__).resolve().parent.parent))  # run from anywhere
 import argparse
@@ -22,7 +22,7 @@ def main():
     ap.add_argument("--epochs", type=int, default=3)
     a = ap.parse_args()
 
-    out_path = config.RESULTS_DIR / "timing.json"
+    out_path = config.HOME / "timing.json"
     timing = json.loads(out_path.read_text()) if out_path.exists() else {}
     full_epochs = json.loads(a.config).get("epochs", DEFAULTS["epochs"])
     for t in a.tasks:
