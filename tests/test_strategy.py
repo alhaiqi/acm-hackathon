@@ -1,7 +1,8 @@
 """strategy.py graded on the fake runs (tests/make_fake_runs.py), whose true effects are known:
 
 - propose_candidates: the menu carries data-specific notes (SSL4EO matches 13 Sentinel-2 bands);
-- submit_shortlist: refuses unknown models, missing reasons and too few families; adds the safe
+- submit_shortlist: refuses unknown models, missing reasons and too few families (a Hub convnext is still
+  the convnext family); adds the safe
   default; writes the reasoning to the journal; returns screen configs on 30% of the data;
 - race_decision: drops the clearly weak screen model; after the race picks branch A and a branch B
   from a DIFFERENT family (skipping the same-family runner-up);
@@ -57,6 +58,17 @@ def main():
     assert all(r["config"]["train_fraction"] == 0.3 for r in ok["screen_runs"])
     assert "MODEL SHORTLIST" in registry.read_journal("m-eurosat") and why in registry.read_journal("m-eurosat")
     print("shortlist:", ok["accepted"])
+
+    # 2b. a Hub model of a curated family does not count as a new family
+    from gotrain import hub
+    from gotrain.train import CANDIDATE_POOL
+    CANDIDATE_POOL["classification"].append(hub._entry("classification", "timm/convnext_tiny.in12k_ft_in1k", 28.6, "t"))
+    try:
+        hf = "hf-hub:timm/convnext_tiny.in12k_ft_in1k"
+        r = sub([{"name": "convnext_tiny", "why": why}, {"name": hf, "why": why}, {"name": "resnet18", "why": why}])
+        assert r["refused"] and "families" in r["why"], r
+    finally:
+        CANDIDATE_POOL["classification"].pop()
 
     for task, truth in truths.items():
         runs = strategy._runs(task)

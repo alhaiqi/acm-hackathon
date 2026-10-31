@@ -48,8 +48,17 @@ def _name(kind: str, cfg: dict) -> str:
     return f"{cfg['seg_arch']}-{cfg['backbone']}" if kind == "segmentation" else cfg["backbone"]
 
 
+def _family(kind: str, e: dict) -> str:
+    """A Hub model's family without the "hf-" prefix (Hub segmentation models are U-Net encoders), so a Hub
+    convnext and the curated convnext count as ONE family in the diversity rules."""
+    f = e["family"]
+    if e.get("source") == "hf" and f.startswith("hf-"):
+        return ("unet-" if kind == "segmentation" else "") + f[3:]
+    return f
+
+
 def _pool(kind: str) -> dict:
-    return {_name(kind, e["config"]): e for e in CANDIDATE_POOL[kind]}
+    return {_name(kind, e["config"]): {**e, "family": _family(kind, e)} for e in CANDIDATE_POOL[kind]}
 
 
 def _state(task: str) -> dict:
