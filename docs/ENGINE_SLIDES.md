@@ -151,6 +151,26 @@ Config of the best run (r003), equal compute per point (960 optimizer steps), ne
 
 ---
 
+## 3c. Reproduce receipts: can we rebuild a production model? (real, m-eurosat v1)
+
+Each registry version gets a receipt: sha256 of the TRAIN/VALID cache files, full config + seed, the code commit at
+training time (reconstructed from git history by the run's timestamp: best effort, labelled so), and the original
+VALID score with its 95% CI. One command retrains it in an isolated home and checks it.
+
+| | m-eurosat v1 (r003, production) |
+|---|---|
+| fingerprint | `a969712199346694` |
+| original VALID | 0.988, CI [0.981, 0.994] |
+| reproduced VALID | **0.988** (1.7 min, T4) |
+| data hashes | match |
+| code | newer (bffec55 vs f930064 at training) - result unchanged |
+| verdict | **REPRODUCED** |
+
+GPU kernels are not bit-deterministic, so the criterion is "inside the original CI", not equality.
+MCP tool `model_receipt`; files in `docs/receipts/m-eurosat/` on branch feature/extras.
+
+---
+
 ## 4. Pretraining that matches the sensor wins
 
 m-eurosat (13-band Sentinel-2), VALID accuracy:
