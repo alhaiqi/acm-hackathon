@@ -33,6 +33,8 @@ class GoTrainGuards(HookProvider):
         named = args.get("task") or (args.get("run_id") or "").split("__")[0] or None
         if task and named and named != task:
             event.cancel_tool = f"refused by guard: this session works on {task}, not {named}"
+        elif name == "finalize_task" and tools.BUDGET.get("valid_only"):
+            event.cancel_tool = "refused by guard: validation-only experiment, finalize is disabled"
         elif name == "finalize_task" and task and (config.RESULTS_DIR / f"{task}.lock.json").exists():
             event.cancel_tool = f"refused by guard: the test split of {task} was already used (lock file exists)"
         elif name in SPENDING and tools.BUDGET["deadline"] and time.time() > tools.BUDGET["deadline"]:

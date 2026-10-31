@@ -82,14 +82,20 @@ def final_report(agent, task: str, session_dir) -> dict | None:
     return rep
 
 
-def run_task(task: str, budget_min: float, session_dir, model=None) -> str:
-    tools.BUDGET.update(task=task, deadline=time.time() + 60 * budget_min)
+VALID_ONLY_NOTE = (" EXPERIMENT MODE (validation only): finalize_task is disabled and the test split is not "
+                   "available. Search for the best VALID score until the budget ends, then report your best run.")
+
+
+def run_task(task: str, budget_min: float, session_dir, model=None, valid_only: bool = False) -> str:
+    """valid_only: a search experiment (e.g. agent vs random search). The guard cancels finalize_task and
+    there is no auto-finalize, so the test split is never read."""
+    tools.BUDGET.update(task=task, deadline=time.time() + 60 * budget_min, valid_only=valid_only)
     logger = ToolCallLog(session_dir / "tool_calls.jsonl")
     attempt = 0
     agent = make_agent(logger, model, _session(task, session_dir, attempt))
-    done = lambda: (config.RESULTS_DIR / f"{task}.lock.json").exists()
+    done = lambda: not valid_only and (config.RESULTS_DIR / f"{task}.lock.json").exists()
     left = lambda: (tools.BUDGET["deadline"] - time.time()) / 60
-    prompt, result, errors, resumes = task_prompt(task, budget_min), "", 0, 0
+    prompt, result, errors, resumes = task_prompt(task, budget_min) + (VALID_ONLY_NOTE if valid_only else ""), "", 0, 0
     # Keep the agent working until it finalizes or the budget ends. If Bedrock throttles or the
     # model stops early, it is resumed with its own journal and leaderboard as memory.
     while True:
@@ -109,10 +115,11 @@ def run_task(task: str, budget_min: float, session_dir, model=None) -> str:
         resumes += 1
         if done() or left() < 4 or resumes > 25:
             break
-        prompt = (f"You have {left():.0f} minutes left for {task} and have not finalized. "
-                  "Read read_journal and leaderboard, then continue the search; finalize before time runs out.")
-    # safety net: if the model ended without finalizing, finalize the best VALID run
-    if not (config.RESULTS_DIR / f"{task}.lock.json").exists():
+        prompt = (f"You have {left():.0f} minutes left for {task}. Read read_journal and leaderboard, then "
+                  + ("continue the search (validation only, no finalize)." if valid_only else
+                     "continue the search; you have not finalized: finalize before time runs out."))
+    # safety net: if the model ended without finalizing, finalize the best VALID run (never in valid_only mode)
+    if not valid_only and not (config.RESULTS_DIR / f"{task}.lock.json").exists():
         from .finalize import finalize
         fin = finalize(task, None, "auto-finalize: agent ended without calling finalize_task")
         (session_dir / f"{task}_autofinalize.json").write_text(json.dumps(fin, indent=1, default=str))
@@ -126,12 +133,13 @@ def main():
     ap = argparse.ArgumentParser(description="Run the GoTrain agent")
     ap.add_argument("--tasks", nargs="+", required=True)
     ap.add_argument("--budget-min", type=float, default=90, help="minutes per task")
+    ap.add_argument("--valid-only", action="store_true", help="search experiment: no finalize, test never read")
     a = ap.parse_args()
     session = config.LOGS_DIR / time.strftime("session_%Y%m%d_%H%M%S")
     session.mkdir(parents=True)
     for t in a.tasks:
-        print(f"\n===== {t}: {a.budget_min:.0f} min =====\n", flush=True)
-        run_task(t, a.budget_min, session)
+        print(f"\n===== {t}: {a.budget_min:.0f} min{' (valid only)' if a.valid_only else ''} =====\n", flush=True)
+        run_task(t, a.budget_min, session, valid_only=a.valid_only)
     from .report import write_report
     print(write_report())
 
