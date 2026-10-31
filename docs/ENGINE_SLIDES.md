@@ -87,6 +87,30 @@ On eurosat our gap is larger than the baselines' typical gap (-0.008 vs -0.002 Â
 
 ---
 
+## 2d. Is the agent better than random search? (m-eurosat, VALID only)
+
+Same task, same trainer, same 60-min wall clock each, one run at a time on the T4, run one after the other
+(16:57-18:54 UTC). Random search samples the agent's own menu (curated backbones, img size, lr, epochs,
+augmentation, label smoothing, mixup, TTA). Isolated homes with TRAIN/VALID links only; the agent ran with
+`--valid-only` (guard cancels finalize). **No lock file was created; test was never read.**
+
+| | Agent (Claude) | Random search |
+|---|---|---|
+| runs finished in 60 min | 15 | 29 |
+| best VALID accuracy | **0.991** [95% CI 0.985, 0.996] | **0.986** [0.979, 0.993] |
+| best config | SSL4EO ResNet50, 128 px, TTA, 40 ep | SSL4EO ResNet18, 128 px, TTA, 30 ep |
+| best reached | run 14, ~48 min | run 2, ~0.7 min (lucky early draw) |
+| median run | 0.986 | 0.978 |
+| runs >= 0.984 | 11 / 15 | 8 / 29 |
+
+Paired test, agent best vs random best (same 1000 val images, McNemar): **+0.005 [-0.001, +0.011], p = 0.18**
+-> **not significant**. Honest reading: with one hour each, the agent's best is not distinguishable from
+random search's best. What the agent does better is *consistency*: its typical run is ~0.8 pts higher
+(median 0.986 vs 0.978) and 73% of its runs reach 0.984 vs 28% for random, with half as many runs
+(it spends time thinking and trains larger models). Caveat: one repetition of each method on one task.
+
+---
+
 ## 3. Evidence, not leaderboard noise (stats.py on the real VALID predictions)
 
 **m-eurosat** (1000 val images): best run 0.988, 95% CI [0.981, 0.994]. Paired McNemar vs the next runs:
