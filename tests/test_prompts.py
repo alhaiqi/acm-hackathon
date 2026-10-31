@@ -1,0 +1,61 @@
+"""The prompts tell Claude what to call; a misspelled or deleted tool name is a silent failure (the agent
+improvises instead). Checked here, without Bedrock:
+
+- every snake_case name in the system, task and resume prompts is a real tool, a tool argument, a
+  training config key or a metrics field;
+- every tool named with "(" in the strategy tools' hints ("next", "first") is a real tool;
+- the method names the stages in order, and the noise rule is a hard rule;
+- the resume prompt points back to the tournament state and keeps valid-only mode free of finalize.
+
+    python tests/test_prompts.py
+"""
+import ast
+import inspect
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+SNAKE = r"\b[a-z0-9]+(?:_[a-z0-9]+)+\b"
+METRICS_FIELDS = {"top_confusions"}          # written by train.metrics_from_probs, read by the agent
+
+
+def main():
+    from gotrain import prompts, strategy, tools
+    from gotrain.train import DEFAULTS
+    names = {f.__name__ for f in tools.ALL_TOOLS}
+    args = {p for f in tools.ALL_TOOLS for p in inspect.signature(f).parameters}
+
+    # 1. prompts only name things that exist
+    texts = {"system": prompts.SYSTEM_PROMPT, "task": prompts.task_prompt("m-eurosat", 90),
+             "resume": prompts.resume_prompt("m-eurosat", 30), "resume_valid": prompts.resume_prompt("m-eurosat", 30, True)}
+    for k, t in texts.items():
+        unknown = set(re.findall(SNAKE, t)) - names - args - set(DEFAULTS) - METRICS_FIELDS
+        assert not unknown, (k, sorted(unknown))
+
+    # 2. the strategy hints only call real tools
+    src = Path(inspect.getsourcefile(strategy)).read_text(encoding="utf-8")
+    called = {m for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Constant) and isinstance(n.value, str)
+              for m in re.findall(r"\b([a-z_]+)\(", n.value)}
+    assert called and called <= names, sorted(called - names)
+
+    # 3. the method in order, and the noise rule
+    s = prompts.SYSTEM_PROMPT
+    order = ["inspect_dataset", "quick_probe", "propose_candidates", "submit_shortlist", "race_decision",
+             "branch_status", "compare_runs", "finalize_task"]
+    method = s[s.index("METHOD"):]
+    pos = [method.index(t) for t in order[:-1]] + [method.rindex("finalize_task")]
+    assert pos == sorted(pos), dict(zip(order, pos))
+    rules = s[:s.index("METHOD")]
+    assert "compare_runs" in rules and "Only a KEEP" in rules and "exactly once" in rules
+
+    # 4. resume: back to the tournament state; valid-only never asks to finalize
+    assert "branch_status" in texts["resume"] and "race_decision" in texts["resume"]
+    assert "finalize before" in texts["resume"] and "finalize before" not in texts["resume_valid"]
+    print(f"prompts name {len(set(re.findall(SNAKE, s)) & names)} of {len(names)} tools; hints call {sorted(called)}")
+    print("PROMPTS OK")
+
+
+if __name__ == "__main__":
+    main()

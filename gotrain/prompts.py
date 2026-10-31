@@ -87,3 +87,13 @@ def task_prompt(task: str, budget_min: float) -> str:
     return (f"Task: {task}. Time budget: {budget_min:.0f} minutes from now (check time_remaining). "
             f"Follow your method: data report and two assumptions, shortlist, screen, race, then the two "
             f"branches with compare_runs after every run; finalize once and report.")
+
+
+def resume_prompt(task: str, left_min: float, valid_only: bool = False) -> str:
+    """After a Bedrock error or an early stop: the tournament state lives on disk, so re-read it."""
+    return (f"You have {left_min:.0f} minutes left for {task}. Read read_journal, then find where the "
+            f"tournament stands: branch_status(task) once the branches exist, otherwise race_decision(task) "
+            f"(after the screen or the race) or the shortlist step. Call compare_runs on any finished run that "
+            f"has no verdict yet, then "
+            + ("continue the search (validation only, no finalize)." if valid_only else
+               "continue the search; you have not finalized: finalize before time runs out."))
