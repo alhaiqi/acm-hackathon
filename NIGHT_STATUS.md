@@ -57,3 +57,4 @@ Times are UTC (Beirut = UTC+2). Newest entry at the bottom. Questions for Mohamm
 - 19:50 P3 predict_geotiff code written and CPU-tested (fake GeoTIFF: output keeps CRS/transform,
   2 bands, refusal on a missing band, opt-in fill with warning; rasterio-missing path returns a clear
   message). Real Lebanon demo waits for the GPU (after A8).
+- 20:05 Merged main (B6) INTO feature/extras (main untouched). Merged branch: AGENT LOOP OK, store layout OK, ENGINE OK, EXTRAS OK (advisor, receipt, inference).
