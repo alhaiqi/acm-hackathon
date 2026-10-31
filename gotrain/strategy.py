@@ -29,6 +29,8 @@ MIN_TRIES = 2           # a branch gets this many tries before it can be pruned
 SCREEN = {"train_fraction": 0.3, "epochs": 10}
 RACE_SIZE = 3           # models that go from the screen to the race
 SEEDS = (2, 3, 5)       # min, default (no timing known), max seeds per raced model
+RACE_SHARE = 0.5        # the race may use at most this share of the time left; the branches need the rest
+MIN_RUN_MIN = 3.0       # a race run is never capped below this many minutes
 MAX_PICKS, MIN_FAMILIES = 6, 3
 SAFE_DEFAULT = {"classification": "resnet18", "multilabel": "resnet18", "segmentation": "unet-resnet34"}
 IDENTITY = ("backbone", "seg_arch", "custom_model")     # what makes a run "the same model"
@@ -238,6 +240,40 @@ def _n_seeds(task: str, n_models: int) -> int:
     return max(SEEDS[0], min(SEEDS[2], math.floor(0.25 * left / (n_models * t_full))))
 
 
+def _full_minutes(r: dict):
+    """Minutes of a full-data run of this screen run's model, scaled from the screen run's own time (an upper
+    bound: early stopping often ends sooner), capped by the run's time limit. None if the time is unknown."""
+    if not r["minutes"]:
+        return None
+    full = {**DEFAULTS, **{k: v for k, v in r["cfg"].items() if k not in SCREEN}}
+    est = r["minutes"] / r["cfg"].get("train_fraction", 1) * full["epochs"] / max(1, r["cfg"].get("epochs", full["epochs"]))
+    return min(est, full["time_limit_min"])
+
+
+def fit_race(race: list[dict], k: int, left) -> dict:
+    """Shrink the race until it fits in RACE_SHARE of the time left. On m-chesapeake one full run takes ~16 min,
+    so 3 models x 3 seeds would spend the whole budget before any branch starts. In order: fewer seeds (not
+    below SEEDS[0]), then two models from two families, then a per-run time limit."""
+    est = [_full_minutes(r) for r in race]
+    if left is None or None in est:
+        return {"race": race, "seeds": k, "time_limit_min": None, "minutes_est": None, "notes": []}
+    budget, notes = RACE_SHARE * left, []
+    total = lambda rs, s: s * sum(_full_minutes(r) for r in rs)
+    k = max(SEEDS[0], min(k, math.floor(budget / sum(est))))
+    if total(race, k) > budget and len(race) > 2:
+        lead = race[0]
+        other = next(r for r in race[1:] if r["family"] != lead["family"])   # race holds >= 2 families
+        notes.append(f"race cut to 2 models ({lead['model']}, {other['model']}): 3 would need "
+                     f"{total(race, k):.0f} of {budget:.0f} min")
+        race = [lead, other]
+    cap = None
+    if total(race, k) > budget:
+        cap = max(MIN_RUN_MIN, round(budget / (k * len(race)), 1))
+        notes.append(f"each race run capped at {cap} min (time_limit_min) to fit {budget:.0f} min")
+    minutes = round(k * sum(min(_full_minutes(r), cap or 1e9) for r in race), 1)
+    return {"race": race, "seeds": k, "time_limit_min": cap, "minutes_est": minutes, "notes": notes}
+
+
 def screen_result(task: str, runs: list[dict]) -> dict:
     done = [r for r in runs if r["screen"] and r["ok"]]
     if len(done) < 2:
@@ -252,6 +288,8 @@ def screen_result(task: str, runs: list[dict]) -> dict:
         other = next((r for r in ranked[RACE_SIZE:] if r["family"] != lead["family"]), None)
         if other:
             race = race[:RACE_SIZE - 1] + [other]
+    fit = fit_race(race, _n_seeds(task, len(race)), _minutes_left())
+    race, k, cap = fit["race"], fit["seeds"], fit["time_limit_min"]
     rows = []
     for r in ranked:
         row = {"run": r["id"], "model": r["model"], "family": r["family"], "score": r["score"]}
@@ -260,16 +298,16 @@ def screen_result(task: str, runs: list[dict]) -> dict:
             row.update(gap=t["diff"], p=t["p"], clearly_behind=bool(t["p"] < ALPHA and -t["diff"] > DROP_SE * t["se"]))
         row["verdict"] = "race" if r in race else "not raced"
         rows.append(row)
-    k = _n_seeds(task, len(race))
     pool = _pool(runs[0]["kind"])
     plan = [{"name": r["model"], "parent_run_id": r["id"], "seed": s,
-             "config": {**{kk: v for kk, v in r["cfg"].items() if kk not in SCREEN}, "seed": s},
+             "config": {**{kk: v for kk, v in r["cfg"].items() if kk not in SCREEN}, "seed": s,
+                        **({"time_limit_min": cap} if cap else {})},
              "hypothesis": f"race {r['model']}, seed {s}: full data, repeated to separate skill from luck"}
             for r in race for s in range(k)]
-    _save_state(task, race={"models": [r["model"] for r in race], "seeds": k})
+    _save_state(task, race={"models": [r["model"] for r in race], "seeds": k, "time_limit_min": cap})
     return {"stage": "screen", "results": rows, "race_models": [r["model"] for r in race],
             "families": {r["model"]: pool.get(r["model"], {}).get("family", r["model"]) for r in race},
-            "seeds": k, "race_runs": plan,
+            "seeds": k, "race_runs": plan, "race_minutes_est": fit["minutes_est"], "budget_notes": fit["notes"],
             "next": "start_training every race run (full data), one at a time; then race_decision(task) again"}
 
 

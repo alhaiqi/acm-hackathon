@@ -7,6 +7,7 @@
   from a DIFFERENT family (skipping the same-family runner-up);
 - compare_runs: KEEP the real gain, TIE the lucky one, REVERT the real loss, FAILED for a crash;
 - branch_status: finds both branches and prunes the one that is clearly behind;
+- fit_race: a race that would spend more than half the time left is cut (seeds, models, time limit);
 - the tools are registered in tools.ALL_TOOLS.
 
     python tests/test_strategy.py
@@ -100,7 +101,22 @@ def main():
         print(f"  branches: A best {bs['branches']['A']['best_score']:.4f} ({bs['branches']['A']['tries']} tries), "
               f"B best {bs['branches']['B']['best_score']:.4f} ({bs['branches']['B']['tries']} tries) -> prune {bs['prune']}")
 
-    # 6. registered for the agent (and therefore for MCP)
+    # 6. the race fits the budget: m-chesapeake-like (~16 min per full run) is cut, m-eurosat-like is not
+    row = lambda model, fam, minutes: {"model": model, "family": fam, "minutes": minutes,
+                                       "cfg": {"backbone": model, "train_fraction": 0.3, "epochs": 10}}
+    slow = [row("unet-resnet34", "unet-resnet", 1.6), row("unet-efficientnet-b4", "unet-efficientnet", 2.4),
+            row("segformer-mit_b2", "segformer", 2.0)]
+    f = strategy.fit_race(slow, 3, 140)
+    assert [r["model"] for r in f["race"]] == ["unet-resnet34", "unet-efficientnet-b4"] and f["seeds"] == 2, f
+    assert f["time_limit_min"] and f["minutes_est"] <= 0.5 * 140 + 1e-9, f
+    fast = [row("ssl4eo_resnet18", "ssl4eo-resnet", 0.05), row("convnext_tiny", "convnext", 0.08),
+            row("resnet18", "resnet", 0.04)]
+    f = strategy.fit_race(fast, 3, 90)
+    assert len(f["race"]) == 3 and f["seeds"] == 3 and f["time_limit_min"] is None and not f["notes"], f
+    assert strategy.fit_race(slow, 3, None)["race"] == slow                 # no deadline (tests, MCP): unchanged
+    print("race budget: chesapeake-like ->", strategy.fit_race(slow, 3, 140)["notes"])
+
+    # 7. registered for the agent (and therefore for MCP)
     names = {f.__name__ for f in tools.ALL_TOOLS}
     assert {"propose_candidates", "submit_shortlist", "race_decision", "compare_runs", "branch_status"} <= names
     print("STRATEGY OK")
