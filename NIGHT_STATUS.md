@@ -3,7 +3,9 @@
 Times are UTC (Beirut = UTC+2). Newest entry at the bottom. Questions for Mohammed go here, at the top.
 
 ## Needs you
-- nothing yet
+- A teammate (~/amoor/trial_home) ran an agent on the shared GPU at ~20:15 UTC (m-brick-kiln, --valid-only,
+  20 min). A8 waits for any running agent before it starts, so if teammates keep starting runs A8 keeps
+  waiting. Please ask them to keep the GPU free until A8 finishes (~01:00 UTC).
 
 ## Queue (priority)
 1. A8 when Omar's B6 lands (watching origin/main for gotrain/prompts.py, base 9cf2434)
@@ -58,3 +60,8 @@ Times are UTC (Beirut = UTC+2). Newest entry at the bottom. Questions for Mohamm
   2 bands, refusal on a missing band, opt-in fill with warning; rasterio-missing path returns a clear
   message). Real Lebanon demo waits for the GPU (after A8).
 - 20:05 Merged main (B6) INTO feature/extras (main untouched). Merged branch: AGENT LOOP OK, store layout OK, ENGINE OK, EXTRAS OK (advisor, receipt, inference).
+- 20:20 A8 attempt 1 did NOT run: launcher said "SMOKE TEST FAILED" although the smoke output had ENGINE OK.
+  Cause: my launch_overnight.sh used `smoke | tee | grep -q` under pipefail (grep -q closes the pipe early,
+  tee gets SIGPIPE -> false failure). No test split touched. Fixed on main (e500751, my engine file).
+- 20:21 A8 relaunched from a new notebook kernel; it is waiting for the teammate's agent run to finish,
+  then smoke test, then m-brick-kiln (100 min) + m-chesapeake (150 min).
