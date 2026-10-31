@@ -14,8 +14,8 @@ from .tools import ALL_TOOLS
 
 
 def extra_tools() -> list:
-    from . import advisor, receipt
-    return list(advisor.MCP_TOOLS) + list(receipt.MCP_TOOLS)
+    from . import advisor, inference, receipt
+    return list(advisor.MCP_TOOLS) + list(receipt.MCP_TOOLS) + list(inference.MCP_TOOLS)
 
 
 EXTRA_TOOLS = extra_tools()

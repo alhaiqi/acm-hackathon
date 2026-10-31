@@ -7,6 +7,11 @@ import json
 import numpy as np
 
 
+def _exists(p):
+    import os
+    return os.path.exists(p)
+
+
 def main():
     from gotrain import advisor, config, registry
     from gotrain.registry import new_run
@@ -54,6 +59,50 @@ def main():
     assert json.loads(receipt.model_receipt("m-eurosat", v))["last_reproduce_check"]["verdict"] == "REPRODUCED"
     assert sorted(p.name for p in (config.RUNS_DIR / "m-eurosat").iterdir()) == runs_before   # nothing written
     print(f"receipt OK: {rec['fingerprint']} val {res['original_val']} -> {res['reproduced_val']}")
+
+    # P3 predict_geotiff: band-name matching rules (no rasterio needed)
+    from gotrain import inference
+    assert [inference.canon(b) for b in ("B8", "b08a", "nir08", "08A - Vegetation Red Edge", "B1", "swir22")] == \
+        ["B08", "B8A", "B8A", "B8A", "B01", "B12"]
+    mb = inference.match_bands(["B01", "B10", "B8A"], ["coastal", "nir08"])
+    assert mb["missing"] == ["B10"] and inference.match_bands(["B01", "B10"], ["B1"], ["B10"])["plan"] == [0, "fill"]
+    try:
+        import rasterio
+    except ImportError:
+        rasterio = None
+    if rasterio is None:
+        assert "rasterio is not installed" in inference.predict_geotiff("x.tif")
+        print("inference OK (rasterio missing: clear message)")
+    else:
+        from rasterio.transform import from_origin
+        Store().promote("m-eurosat", v, "production")
+        meta = advisor.data.task_meta("m-eurosat")
+        Xva, _ = advisor.data.load_split("m-eurosat", "valid")
+        img = np.concatenate([np.concatenate(list(np.asarray(Xva[i * 3:i * 3 + 3])), -1) for i in range(3)], -2)
+        tif = config.HOME / "fake_scene.tif"
+        prof = {"driver": "GTiff", "height": img.shape[1], "width": img.shape[2], "count": img.shape[0],
+                "dtype": "float32", "crs": "EPSG:32636", "transform": from_origin(700000, 3750000, 10, 10)}
+        with rasterio.open(tif, "w", **prof) as d:
+            d.write(img.astype("float32"))
+            for i, b in enumerate(meta["bands"], 1):
+                d.set_band_description(i, b)
+        r = json.loads(inference.predict_geotiff(str(tif), task="m-eurosat"))
+        with rasterio.open(r["output_geotiff"]) as o:
+            assert o.count == 2 and str(o.crs) == "EPSG:32636" and o.transform == prof["transform"]
+            assert o.shape == img.shape[1:] and o.read(2).max() <= 100
+        assert (config.HOME / "inference").exists() and _exists(r["preview_png"])
+        # drop a band -> refused; allow filling it -> runs with a warning
+        tif2 = config.HOME / "fake_scene_3b.tif"
+        with rasterio.open(tif2, "w", **{**prof, "count": img.shape[0] - 1}) as d:
+            d.write(img[1:].astype("float32"))
+            for i, b in enumerate(meta["bands"][1:], 1):
+                d.set_band_description(i, b)
+        ref = json.loads(inference.predict_geotiff(str(tif2), task="m-eurosat"))
+        assert ref.get("refused") and "lacks bands" in ref["why"], ref
+        ok = json.loads(inference.predict_geotiff(str(tif2), task="m-eurosat",
+                                                  fill_missing=inference.canon(meta["bands"][0])))
+        assert ok["filled_bands"] and any("filled" in w for w in ok["warnings"]), ok
+        print(f"inference OK: {r['shape']} -> {r['class_area']}, refusal + opt-in fill checked")
 
     # MCP: extras exposed to MCP only, not to the training agent
     from gotrain import mcp_server, tools
