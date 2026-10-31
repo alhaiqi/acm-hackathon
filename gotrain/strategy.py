@@ -399,7 +399,11 @@ def compare_runs(run_id: str, parent_run_id: str = "") -> str:
     parent = parent_run_id or registry.read(run_id)["parent"]
     if not parent:
         return _j({"refused": True, "why": f"{run_id} has no parent: pass parent_run_id"})
-    return _j(compare(task, run_id, parent, _runs(task)))
+    out = compare(task, run_id, parent, _runs(task))
+    if "verdict" in out and out.get("run") == run_id:     # remembered: branch_status shows it after a restart
+        _save_state(task, verdicts={**_state(task).get("verdicts", {}), run_id: {
+            "verdict": out["verdict"], "parent": parent, "gain": out.get("gain"), "p": out.get("p")}})
+    return _j(out)
 
 
 # --------------------------------------------------------------------------- 5. branches
@@ -422,6 +426,7 @@ def branches(task: str, runs: list[dict]) -> dict:
     groups = _groups(list(race.values()))
     keys = sorted(set(branch_of.values()),      # A = the race winner: order by the race mean
                   key=lambda k: -stats.group_score([r["id"] for r in groups[k] if r["ok"]])["mean"])
+    verdicts = _state(task).get("verdicts", {})
     rows = {}
     for i, key in enumerate(keys):
         members = [byid[rid] for rid, k in branch_of.items() if k == key]
@@ -432,8 +437,17 @@ def branches(task: str, runs: list[dict]) -> dict:
                                    "best_run": best["id"], "best_score": best["score"], "best_95": [ci["low"], ci["high"]],
                                    "tries": len(tries), "failed": sum(m["state"] == "failed" for m in tries),
                                    "running": [m["id"] for m in tries if m["state"] == "running"],
-                                   "minutes": round(sum(m["minutes"] for m in tries), 1)}
-    out = {"branches": rows, "assumptions": _state(task).get("assumptions", [])}
+                                   "minutes": round(sum(m["minutes"] for m in tries), 1),
+                                   # what was tried and how it was judged: do not repeat a REVERT or a TIE
+                                   "tried": [{"run": m["id"], "change": (m["hypothesis"] or "")[:160],
+                                              "verdict": verdicts.get(m["id"], {}).get("verdict") or
+                                              ("FAILED" if m["state"] == "failed" else "not judged yet")}
+                                             for m in tries]}
+    unjudged = [m["id"] for m in runs if m["id"] in branch_of and m["id"] not in race and m["ok"]
+                and m["id"] not in verdicts]
+    out = {"branches": rows, "assumptions": _state(task).get("assumptions", []), "unjudged": unjudged}
+    if unjudged:
+        out["first"] = f"call compare_runs on {unjudged} before building on them"
     if len(rows) < 2:
         return {**out, "next": "A", "why": "only one branch"}
     floor = _floor(runs)

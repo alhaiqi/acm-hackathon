@@ -7,6 +7,7 @@
   from a DIFFERENT family (skipping the same-family runner-up);
 - compare_runs: KEEP the real gain, TIE the lucky one, REVERT the real loss, FAILED for a crash;
 - branch_status: finds both branches and prunes the one that is clearly behind;
+- branch_status remembers every compare_runs verdict and flags finished runs nobody judged;
 - fit_race: a race that would spend more than half the time left is cut (seeds, models, time limit);
 - the tools are registered in tools.ALL_TOOLS.
 
@@ -98,6 +99,16 @@ def main():
         assert set(bs["branches"]) == {"A", "B"} and bs["branches"]["A"]["model"] == a, bs
         assert bs["branches"]["A"]["failed"] == 1 and bs["prune"] == "B" and bs["next"] == "A", bs
         assert bs["ensemble_candidates"] == [bs["branches"]["A"]["best_run"]]
+
+        # 5b. memory: judged runs carry their verdict; a finished run nobody judged is flagged
+        tried = {t["run"]: t["verdict"] for b in bs["branches"].values() for t in b["tried"]}
+        for rid, info in truth["runs"].items():
+            if info["role"] in want:
+                assert tried[rid] == want[info["role"]], (rid, tried)
+        small = [r for r, i in truth["runs"].items() if i["role"] == "small_gain"]
+        assert small and set(small) <= set(bs["unjudged"]) and "compare_runs" in bs["first"], bs
+        strategy.compare_runs(small[0])
+        assert small[0] not in j(strategy.branch_status(task))["unjudged"]
         print(f"  branches: A best {bs['branches']['A']['best_score']:.4f} ({bs['branches']['A']['tries']} tries), "
               f"B best {bs['branches']['B']['best_score']:.4f} ({bs['branches']['B']['tries']} tries) -> prune {bs['prune']}")
 
