@@ -96,7 +96,8 @@ class Store:
                      "hypothesis": info["hypothesis"], "files": files,
                      "published": time.strftime("%Y-%m-%d %H:%M:%S")}
             vers.append(entry)
-        entry["stage"] = stage
+        if entry.get("stage") != "production":   # re-publishing never demotes production; use promote()
+            entry["stage"] = stage
         if test_metrics is not None:
             entry["test_metrics"] = test_metrics
         if ensemble:   # test_metrics are those of the averaged ensemble, not of this member alone

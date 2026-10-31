@@ -1,9 +1,9 @@
 """A7 demo: datasets and model versions in S3 (or the local store), with lineage and stages.
 
-    export GOTRAIN_S3_BUCKET=my-team-bucket        # optional; without it the same layout is written locally
+    export GOTRAIN_S3_BUCKET=my-team-bucket GOTRAIN_S3_PREFIX=group4/gotrain   # optional; else written locally
     python scripts/registry_demo.py m-eurosat
 
-Uses the task's best VALID run: publishes it as a candidate, promotes it to staging, pulls it back
+Uses the best VALID run that is not yet published (finalized production versions are left alone): publishes it as a candidate, promotes it to staging, pulls it back
 as another machine would, and prints the registry. Never touches TEST.
 """
 import sys as _sys, pathlib as _pl; _sys.path.insert(0, str(_pl.Path(__file__).resolve().parent.parent))  # run from anywhere
@@ -17,15 +17,17 @@ task = sys.argv[1] if len(sys.argv) > 1 else "m-eurosat"
 st = Store()
 print("store:", f"s3://{config.S3_BUCKET}/{config.S3_PREFIX}" if config.S3_BUCKET else config.STORE_DIR)
 
-best = registry.best_run(task)
+published = {v["run_id"] for v in st.versions(task)}
+done = [r for r in registry.leaderboard(task) if r["state"] == "done" and r["val_score"] is not None]
+best = next((r for r in done if r["run_id"] not in published), None)   # never re-stage a finalized model
 if best is None:
-    sys.exit(f"no finished run for {task}: train one first (python -m gotrain.train --task {task})")
+    sys.exit(f"no unpublished finished run for {task}: train one first (python -m gotrain.train --task {task})")
 
 print("\n1. push the prepared dataset cache")
 for uri in st.push_dataset(task):
     print("  ", uri)
 
-print(f"\n2. publish best VALID run {best['run_id']} (val {best['val_score']:.4f}) as a candidate")
+print(f"\n2. publish best unpublished VALID run {best['run_id']} (val {best['val_score']:.4f}) as a candidate")
 entry = st.publish_run(best["run_id"], stage="candidate")
 print("   version", entry["version"], "parent run", entry["parent_run"])
 
