@@ -342,3 +342,6 @@ ALL_TOOLS += ALL_STRATEGY_TOOLS
 
 from gotrain.hub import ALL_HUB_TOOLS  # noqa: E402  (Hugging Face model discovery, with a leakage guard)
 ALL_TOOLS += ALL_HUB_TOOLS
+
+from gotrain.literature import ALL_LITERATURE_TOOLS  # noqa: E402  (arXiv search; GOTRAIN_ARXIV=0 turns it off)
+ALL_TOOLS += ALL_LITERATURE_TOOLS
