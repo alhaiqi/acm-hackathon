@@ -66,3 +66,7 @@ Times are UTC (Beirut = UTC+2). Newest entry at the bottom. Questions for Mohamm
 - 20:21 A8 relaunched from a new notebook kernel; it is waiting for the teammate's agent run to finish,
   then smoke test, then m-brick-kiln (100 min) + m-chesapeake (150 min).
 - 20:32 A8 RUNNING: smoke passed (20:31), m-brick-kiln agent started 20:32 (100 min) using B6 tools (search_papers, propose_candidates, submit_shortlist). An 'A8_FAILED' alert at 20:32 was a false alarm from my own waiter matching the fix's commit message in the log; waiter pattern fixed.
+- 21:27 m-brick-kiln FINALIZED by the agent: run r016, VALID 0.992, **TEST 0.983** (accuracy). One test read, lock written.
+  m-chesapeake agent started 21:27 (150 min, expected end ~00:00 UTC).
+- 21:42 Laptop low on memory: Claude Code killed my background waiter (bhjv6f6gc). Per the tool's rule I did not
+  auto-restart it; A8 itself is unaffected (runs on SageMaker in a notebook kernel). Checked A8 by hand at 21:42: alive.
