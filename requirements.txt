@@ -2,8 +2,9 @@ geobench
 strands-agents
 torch
 timm
-segmentation-models-pytorch
+segmentation-models-pytorch>=0.4  # segformer arch
 scikit-learn
 boto3
 huggingface_hub
 mcp
+torchgeo  # SSL4EO Sentinel-2 weights (optional: falls back to ImageNet)

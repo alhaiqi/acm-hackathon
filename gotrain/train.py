@@ -27,9 +27,10 @@ import torch.nn.functional as F
 from . import config, data
 
 DEFAULTS = {
-    "backbone": "resnet18",          # timm name (classification) or smp encoder name (segmentation)
-    "pretrained": True,              # ImageNet weights; first conv is adapted to any number of bands
-    "seg_arch": "unet",              # unet | unetplusplus | fpn | deeplabv3plus | linknet | pspnet
+    "backbone": "resnet18",          # timm name, ssl4eo_resnet18/50 (classification) or smp encoder name (segmentation)
+    "pretrained": True,              # ImageNet (or SSL4EO) weights; first conv is adapted to any number of bands
+    "seg_arch": "unet",              # unet | unetplusplus | fpn | deeplabv3plus | linknet | pspnet | segformer
+    "channel_adapter": False,        # segmentation: learned 1x1 conv bands -> 3 in front of an RGB-only encoder (set automatically if needed)
     "custom_model": None,            # name of a file written with the write_custom_model tool
     "channels": None,                # list of channel indices to keep, None = all
     "img_size": None,                # resize inputs to this square size (None = native)
@@ -47,7 +48,7 @@ DEFAULTS = {
     "augment": ["flip", "rot90"],    # flip, rot90, scale_jitter, noise
     "mixup": 0.0,                    # classification only: Beta(a, a) mixing, 0 = off
     "drop_rate": 0.0,
-    "tta": False,                    # average predictions over flips at evaluation
+    "tta": False,                    # average predictions over the 8 flips/rotations at evaluation (3 flips if not square)
     "patience": 8,                   # epochs without a better VALID score before stopping
     "time_limit_min": 20.0,          # hard wall-clock limit for the run
     "train_fraction": 1.0,           # < 1 to try ideas quickly on a subset
@@ -57,6 +58,40 @@ DEFAULTS = {
 }
 
 PRIMARY = {"classification": "accuracy", "multilabel": "f1_micro", "segmentation": "miou"}
+
+# The curated candidate pool for the model tournament (strategy.propose_candidates reads it).
+# Each entry is a config fragment plus facts the strategy uses to filter (params, what data it suits).
+CANDIDATE_POOL = {
+    "classification": [
+        {"config": {"backbone": "resnet18"}, "family": "resnet", "weights": "imagenet", "params_M": 11.7,
+         "suits": "any; fast baseline"},
+        {"config": {"backbone": "resnet50"}, "family": "resnet", "weights": "imagenet", "params_M": 25.6,
+         "suits": "any; more capacity"},
+        {"config": {"backbone": "convnext_tiny", "img_size": 128}, "family": "convnext", "weights": "imagenet",
+         "params_M": 28.6, "suits": "any; strong modern CNN, wants img_size >= 128"},
+        {"config": {"backbone": "efficientnet_b0"}, "family": "efficientnet", "weights": "imagenet", "params_M": 5.3,
+         "suits": "small datasets; cheap"},
+        {"config": {"backbone": "ssl4eo_resnet18"}, "family": "resnet-ssl4eo", "weights": "SSL4EO-S12 S2 MoCo",
+         "params_M": 11.7, "suits": "Sentinel-2 13 bands; falls back to ImageNet if torchgeo/weights missing"},
+        {"config": {"backbone": "ssl4eo_resnet50"}, "family": "resnet-ssl4eo", "weights": "SSL4EO-S12 S2 MoCo",
+         "params_M": 25.6, "suits": "Sentinel-2 13 bands; falls back to ImageNet if torchgeo/weights missing"},
+    ],
+    "segmentation": [
+        {"config": {"seg_arch": "unet", "backbone": "resnet34"}, "family": "unet-resnet", "weights": "imagenet",
+         "params_M": 24.4, "suits": "any; reliable baseline"},
+        {"config": {"seg_arch": "unet", "backbone": "efficientnet-b4"}, "family": "unet-efficientnet",
+         "weights": "imagenet", "params_M": 20.2, "suits": "small objects, high resolution"},
+        {"config": {"seg_arch": "unet", "backbone": "tu-convnext_tiny"}, "family": "unet-convnext",
+         "weights": "imagenet", "params_M": 32.0, "suits": "any; strong encoder"},
+        {"config": {"seg_arch": "segformer", "backbone": "mit_b0"}, "family": "segformer", "weights": "imagenet",
+         "params_M": 3.7, "suits": "fast transformer; RGB encoder (adapter added for >3 bands)"},
+        {"config": {"seg_arch": "segformer", "backbone": "mit_b2"}, "family": "segformer", "weights": "imagenet",
+         "params_M": 24.7, "suits": "transformer, global context; RGB encoder (adapter added for >3 bands)"},
+    ],
+}
+CANDIDATE_POOL["multilabel"] = CANDIDATE_POOL["classification"]
+
+SSL4EO = {"ssl4eo_resnet18": ("resnet18", "ResNet18_Weights"), "ssl4eo_resnet50": ("resnet50", "ResNet50_Weights")}
 
 
 # --------------------------------------------------------------------------- model
@@ -75,8 +110,56 @@ class PadTo32(nn.Module):
         return self.net(x)[..., :h, :w]
 
 
+def adapt_first_conv(conv: nn.Conv2d, in_ch: int, keep=None) -> nn.Conv2d:
+    """Same conv for `in_ch` input bands. keep = indices of the pretrained bands to reuse (e.g. a band
+    subset of the same sensor); otherwise every new band starts from the mean of the pretrained filters."""
+    new = nn.Conv2d(in_ch, conv.out_channels, conv.kernel_size, conv.stride, conv.padding, bias=conv.bias is not None)
+    w = conv.weight.data
+    with torch.no_grad():
+        if keep is not None and len(keep) == in_ch and max(keep) < w.shape[1]:
+            new.weight.copy_(w[:, list(keep)])
+        else:
+            new.weight.copy_(w.mean(1, keepdim=True).repeat(1, in_ch, 1, 1) * w.shape[1] / in_ch)
+        if conv.bias is not None:
+            new.bias.copy_(conv.bias.data)
+    return new
+
+
+def _ssl4eo_model(cfg: dict, in_ch: int, n: int, notes: list):
+    """timm ResNet with torchgeo SSL4EO-S12 Sentinel-2 (13 bands, MoCo) weights; ImageNet if unavailable.
+    The checkpoint stores the adapted weights, so pretrained=False (finalize) rebuilds the same shapes."""
+    import timm
+
+    arch, wname = SSL4EO[cfg["backbone"]]
+    if not cfg["pretrained"]:
+        return timm.create_model(arch, pretrained=False, in_chans=in_ch, num_classes=n, drop_rate=cfg["drop_rate"])
+    try:
+        import torchgeo.models as tgm
+
+        w = getattr(tgm, wname).SENTINEL2_ALL_MOCO
+        model = getattr(tgm, arch)(weights=w)
+        model.reset_classifier(n)
+        model.drop_rate = cfg["drop_rate"]
+        src = int(w.meta.get("in_chans", 13))
+        if in_ch != src:
+            model.conv1 = adapt_first_conv(model.conv1, in_ch, cfg["channels"])
+            notes.append(f"SSL4EO first conv adapted {src} -> {in_ch} bands")
+        notes.append("SSL4EO-S12 Sentinel-2 MoCo weights (pretrained on S2 L1C; our z-score normalisation differs, fine-tuning absorbs it)")
+        return model
+    except Exception as e:
+        notes.append(f"SSL4EO weights unavailable ({type(e).__name__}: {str(e)[:120]}); using ImageNet {arch}")
+        try:
+            return timm.create_model(arch, pretrained=True, in_chans=in_ch, num_classes=n, drop_rate=cfg["drop_rate"])
+        except Exception as e2:
+            notes.append(f"ImageNet weights unavailable too ({type(e2).__name__}); trained from scratch")
+            return timm.create_model(arch, pretrained=False, in_chans=in_ch, num_classes=n, drop_rate=cfg["drop_rate"])
+
+
 def build_model(meta: dict, cfg: dict, in_ch: int):
-    """Returns (model, list of encoder parameters, notes)."""
+    """Returns (model, list of encoder parameters, notes).
+
+    May set cfg["channel_adapter"] = True (segmentation encoder that only accepts 3 bands); cfg is saved
+    in the checkpoint, so finalize rebuilds the same architecture."""
     kind, n = meta["kind"], meta["n_classes"]
     notes = []
     if cfg.get("custom_model"):
@@ -93,15 +176,38 @@ def build_model(meta: dict, cfg: dict, in_ch: int):
     if kind == "segmentation":
         import segmentation_models_pytorch as smp
 
-        def make(weights):
+        def make(weights, ch):
             return smp.create_model(cfg["seg_arch"], encoder_name=cfg["backbone"], encoder_weights=weights,
-                                    in_channels=in_ch, classes=n)
+                                    in_channels=ch, classes=n)
+
+        def with_adapter(net):
+            # learned bands -> 3 mixing in front of an encoder that only takes RGB (e.g. mit_* in some smp versions)
+            return nn.Sequential(nn.Conv2d(in_ch, 3, 1), net)
+
+        weights = "imagenet" if cfg["pretrained"] else None
+        if cfg["channel_adapter"]:
+            net = make(weights, 3)
+            return PadTo32(with_adapter(net)), list(net.encoder.parameters()), [f"channel adapter {in_ch} -> 3"]
         try:
-            net = make("imagenet" if cfg["pretrained"] else None)
-        except Exception as e:  # no internet / no weights for this encoder
+            net = make(weights, in_ch)
+        except Exception as e:
+            if in_ch != 3:
+                try:   # encoder may refuse in_channels != 3: keep its pretrained weights behind an adapter
+                    net = make(weights, 3)
+                    cfg["channel_adapter"] = True
+                    notes.append(f"{cfg['backbone']} refused {in_ch} input bands ({type(e).__name__}); "
+                                 f"added a learned 1x1 adapter {in_ch} -> 3")
+                    return PadTo32(with_adapter(net)), list(net.encoder.parameters()), notes
+                except Exception:
+                    pass
             notes.append(f"pretrained weights unavailable ({type(e).__name__}: {str(e)[:120]}); trained from scratch")
-            net = make(None)
+            net = make(None, in_ch)
         return PadTo32(net), list(net.encoder.parameters()), notes
+
+    if cfg["backbone"] in SSL4EO:
+        model = _ssl4eo_model(cfg, in_ch, n, notes)
+        head = {id(p) for p in model.get_classifier().parameters()}
+        return model, [p for p in model.parameters() if id(p) not in head], notes
 
     import timm
 
@@ -256,8 +362,40 @@ def metrics_from(kind, n, y_true, out, names):
             "per_class_iou": {names[i]: round(float(iou[i]), 3) for i in range(n) if present[i]}}
 
 
+def metrics_from_probs(meta: dict, y_true, probs) -> dict:
+    """Metrics from saved probabilities (val_preds.npz, or an ensemble average of several runs).
+    probs: (N, C) for classification/multilabel, (N, C, H, W) for segmentation; y_true as stored."""
+    kind, n = meta["kind"], meta["n_classes"]
+    if kind != "segmentation":
+        return metrics_from(kind, n, np.asarray(y_true), np.asarray(probs, dtype=np.float32), meta["class_names"])
+    cm = np.zeros((n, n), dtype=np.int64)
+    for i in range(0, len(probs), 32):      # chunked: segmentation probabilities can be GBs
+        pred = np.asarray(probs[i:i + 32]).argmax(1).reshape(-1)
+        t = np.asarray(y_true[i:i + 32]).reshape(-1).astype(np.int64)
+        ok = (t >= 0) & (t < n)
+        np.add.at(cm, (t[ok], pred[ok]), 1)
+    return metrics_from(kind, n, None, cm, meta["class_names"])
+
+
+def tta_views(on: bool, square: bool):
+    """(forward, inverse) pairs. Satellite images have no 'up', so all 8 symmetries of the square (D4) are valid."""
+    ident = (lambda t: t, lambda t: t)
+    if not on:
+        return [ident]
+    if not square:   # rot90 would change the shape: flips only
+        return [ident, (lambda t: t.flip(-1), lambda t: t.flip(-1)), (lambda t: t.flip(-2), lambda t: t.flip(-2))]
+    views = []
+    for f in (False, True):
+        for k in range(4):
+            views.append((lambda t, k=k, f=f: torch.rot90(t.flip(-1) if f else t, k, (-2, -1)),
+                          lambda t, k=k, f=f: (lambda u: u.flip(-1) if f else u)(torch.rot90(t, -k, (-2, -1)))))
+    return views
+
+
 @torch.no_grad()
-def evaluate(model, X, y, meta, cfg, norm, device, batch=None):
+def evaluate(model, X, y, meta, cfg, norm, device, batch=None, return_probs=False):
+    """Returns (metrics, probs). probs is (N, C) for classification/multilabel always, and
+    (N, C, H, W) float16 for segmentation only if return_probs (otherwise None: it can be GBs)."""
     kind, n = meta["kind"], meta["n_classes"]
     seg = kind == "segmentation"
     model.eval()
@@ -271,9 +409,7 @@ def evaluate(model, X, y, meta, cfg, norm, device, batch=None):
         xb = norm(xb.to(device))
         H, W = xb.shape[-2:]
         xr, _ = resize(xb, None, cfg["img_size"], seg)
-        views = [(lambda t: t, lambda t: t)]
-        if cfg["tta"]:
-            views += [(lambda t: t.flip(-1), lambda t: t.flip(-1)), (lambda t: t.flip(-2), lambda t: t.flip(-2))]
+        views = tta_views(cfg["tta"], xr.shape[-1] == xr.shape[-2])
         acc = 0
         for fwd, back in views:
             with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=cfg["amp"] and device.type == "cuda"):
@@ -291,10 +427,23 @@ def evaluate(model, X, y, meta, cfg, norm, device, batch=None):
             t = np.asarray(y[i:i + batch]).reshape(-1).astype(np.int64)
             ok = (t >= 0) & (t < n)
             np.add.at(cm, (t[ok], pred[ok]), 1)
+            if return_probs:
+                probs.append(acc.half().cpu().numpy())
         else:
             probs.append(acc.cpu().numpy())
     out = cm if seg else np.concatenate(probs)
-    return metrics_from(kind, n, np.asarray(y), out, meta["class_names"]), (None if seg else out)
+    p = (np.concatenate(probs) if return_probs else None) if seg else out
+    return metrics_from(kind, n, np.asarray(y), out, meta["class_names"]), p
+
+
+def save_val_preds(run_dir: Path, probs, y, kind: str) -> None:
+    """Contract file for the strategy side: probs (N,C) or (N,C,H,W) float16 + labels. Atomic (a killed
+    run never leaves a half-written file)."""
+    y = np.asarray(y)
+    y = y.astype(np.int16) if kind == "segmentation" else y
+    tmp = run_dir / "val_preds.tmp.npz"
+    np.savez(tmp, probs=np.asarray(probs).astype(np.float16), y=y)
+    os.replace(tmp, run_dir / "val_preds.npz")
 
 
 # --------------------------------------------------------------------------- run
@@ -382,16 +531,19 @@ def run(run_dir: Path):
                 tot += loss.item() * xb.shape[0]; cnt += xb.shape[0]; step += 1
                 if not math.isfinite(loss.item()):
                     raise FloatingPointError("loss became NaN/inf: lower lr or check normalization")
-            m, _ = evaluate(model, Xva, yva, meta, cfg, norm, device)
+            m, probs = evaluate(model, Xva, yva, meta, cfg, norm, device, return_probs=True)
             score = m[primary]
             mark = ""
             if score > best:
                 best, best_ep, bad, mark = score, ep, 0, " *best"
                 torch.save({"state_dict": model.state_dict(), "config": cfg, "task": task, "meta": meta,
                             "in_ch": in_ch, "epoch": ep, "val_metrics": m}, run_dir / "model.pt")
-                (run_dir / "best_val_metrics.json").write_text(json.dumps({"epoch": ep, **m}, indent=1))
+                save_val_preds(run_dir, probs, yva, kind)
+                (run_dir / "best_val_metrics.json").write_text(json.dumps(
+                    {"epoch": ep, "primary_metric": primary, "primary": score, **m}, indent=1))
             else:
                 bad += 1
+            del probs
             rec = {"epoch": ep, "train_loss": tot / max(cnt, 1), f"val_{primary}": score,
                    "lr": opt.param_groups[0]["lr"], "sec": round(time.time() - te, 1)}
             with open(run_dir / "history.jsonl", "a") as f:

@@ -75,7 +75,8 @@ class Store:
     def versions(self, task: str) -> list[dict]:
         return self.get_json(f"models/{task}/registry.json", default=[])
 
-    def publish_run(self, run_id: str, stage: str = "candidate", test_metrics: dict | None = None) -> dict:
+    def publish_run(self, run_id: str, stage: str = "candidate", test_metrics: dict | None = None,
+                    ensemble: list[str] | None = None) -> dict:
         info = registry.read(run_id)
         task = info["task"]
         rd = registry.run_dir(run_id)
@@ -98,5 +99,35 @@ class Store:
         entry["stage"] = stage
         if test_metrics is not None:
             entry["test_metrics"] = test_metrics
+        if ensemble:   # test_metrics are those of the averaged ensemble, not of this member alone
+            entry["ensemble_members"] = ensemble
         self.put_json(vers, f"models/{task}/registry.json")
         return entry
+
+    def promote(self, task: str, version: int, stage: str) -> dict:
+        """Move a version to another stage (candidate -> staging -> production, or archived)."""
+        vers = self.versions(task)
+        hit = [v for v in vers if v["version"] == int(version)]
+        if not hit:
+            raise KeyError(f"{task} has no version {version}")
+        hit[0]["stage"] = stage
+        hit[0]["stage_changed"] = time.strftime("%Y-%m-%d %H:%M:%S")
+        self.put_json(vers, f"models/{task}/registry.json")
+        return hit[0]
+
+    def pull_model(self, task: str, version: int | None = None, dst: Path | None = None) -> dict:
+        """Download a model version (default: newest 'production', else newest) for inference elsewhere."""
+        vers = self.versions(task)
+        if not vers:
+            raise KeyError(f"no published versions for {task}")
+        if version is None:
+            prod = [v for v in vers if v.get("stage") == "production"]
+            entry = (prod or vers)[-1]
+        else:
+            entry = next((v for v in vers if v["version"] == int(version)), None)
+            if entry is None:
+                raise KeyError(f"{task} has no version {version}")
+        dst = Path(dst or config.HOME / "pulled" / task / f"v{entry['version']}")
+        names = [n for n in ("model.pt", "config.json", "metrics.json") if n in entry.get("files", {})]
+        got = [str(self.get_file(f"models/{task}/v{entry['version']}/{n}", dst / n)) for n in names]
+        return {"version": entry["version"], "stage": entry.get("stage"), "run_id": entry["run_id"], "files": got}

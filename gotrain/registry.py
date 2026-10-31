@@ -7,6 +7,8 @@ runs/<task>/<run_id>/
     history.jsonl        one line per epoch
     metrics.json         final VALID metrics (written when the run ends)
     model.pt             best-on-VALID checkpoint
+    best_val_metrics.json  VALID metrics of that checkpoint, with "primary" = the primary score
+    val_preds.npz        VALID probabilities of that checkpoint (probs float16, y) for stats and ensembles
 runs/<task>/journal.md   the agent's reasoning: hypotheses, observations, decisions
 """
 from __future__ import annotations
@@ -32,7 +34,8 @@ def new_run(task: str, cfg: dict, hypothesis: str, parent: str | None) -> Path:
     rd.mkdir()
     (rd / "config.json").write_text(json.dumps({
         "run_id": run_id, "task": task, "config": cfg, "hypothesis": hypothesis,
-        "parent": parent, "created": time.strftime("%Y-%m-%d %H:%M:%S")}, indent=1))
+        "parent": parent, "seed": cfg.get("seed", 0),   # 0 = train.DEFAULTS["seed"]
+        "created": time.strftime("%Y-%m-%d %H:%M:%S")}, indent=1))
     return rd
 
 

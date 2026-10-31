@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 
 from . import config, data, registry
-from .train import DEFAULTS
+from .train import CANDIDATE_POOL, DEFAULTS
 
 # Set by agent.py for each task session; tools refuse to start runs past the deadline.
 BUDGET = {"deadline": None, "task": None}
@@ -108,14 +108,15 @@ def training_options() -> str:
                                                   "swin_tiny_patch4_window7_224 (needs img_size 224)"],
         "segmentation_encoders (smp names)": ["resnet18", "resnet34", "resnet50", "efficientnet-b0", "efficientnet-b4",
                                               "mit_b0", "mit_b2", "tu-convnext_tiny"],
-        "segmentation_archs": ["unet", "unetplusplus", "fpn", "deeplabv3plus", "linknet", "pspnet"],
+        "segmentation_archs": ["unet", "unetplusplus", "fpn", "deeplabv3plus", "linknet", "pspnet", "segformer"],
+        "candidate_pool (curated, with Sentinel-2 SSL4EO weights)": CANDIDATE_POOL,
         "tips": [
             "Small images (e.g. 64x64): upsampling with img_size 128-224 often helps ImageNet backbones.",
             "Many bands (Sentinel-2): keep all channels; the first conv is adapted. Try channels=[RGB indices] as an ablation.",
             "Use train_fraction 0.2-0.3 and few epochs to screen ideas cheaply, then confirm on full data.",
             "Pretrained encoders like a lower lr than the head: backbone_lr_mult 0.1 is the default.",
             "Imbalanced classes: class_weights 'balanced' or loss 'focal'; segmentation: loss 'ce+dice'.",
-            "tta true is a cheap gain at evaluation time.",
+            "tta true is a cheap gain at evaluation time (8 flips/rotations on square inputs).",
         ],
     })
 
@@ -293,7 +294,7 @@ def finalize_task(task: str, run_id: str, justification: str) -> str:
 
     Args:
         task: task name.
-        run_id: the run to evaluate.
+        run_id: the run to evaluate, or several comma-separated runs ("r1,r2,r3") to average as an ensemble.
         justification: why this run (VALID evidence only).
     """
     from .finalize import finalize
