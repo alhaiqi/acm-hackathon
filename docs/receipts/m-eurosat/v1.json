@@ -1,0 +1,57 @@
+{
+ "task": "m-eurosat",
+ "version": 1,
+ "run_id": "m-eurosat__r003",
+ "stage": "production",
+ "data_sha256": {
+  "train_X.npy": "932d5d9667bf8386a3b71f6c6ed9a2cb3c30daf44e5431e6488365e23aa4a4bc",
+  "train_y.npy": "b8cc73775af80ee63529793ae57f9194fbe2ecb73916ff66bc2950008f1d1f2b",
+  "valid_X.npy": "6ec084958ca1fd8f8cea0ad7cbc444903269b52f9d52fb1e489a39b1429aad42",
+  "valid_y.npy": "4cf656007bb415a824bb45a8e9c6a7bbbb9ee3d196a9cabe966ba5022c7b26dc"
+ },
+ "config": {
+  "backbone": "ssl4eo_resnet50",
+  "pretrained": true,
+  "seg_arch": "unet",
+  "channel_adapter": false,
+  "custom_model": null,
+  "channels": null,
+  "img_size": 128,
+  "normalization": "zscore",
+  "epochs": 30,
+  "batch_size": 64,
+  "lr": 0.001,
+  "backbone_lr_mult": 0.1,
+  "weight_decay": 0.05,
+  "warmup_epochs": 1,
+  "freeze_backbone_epochs": 0,
+  "loss": "ce",
+  "label_smoothing": 0.0,
+  "class_weights": "none",
+  "augment": [
+   "flip",
+   "rot90"
+  ],
+  "mixup": 0.0,
+  "drop_rate": 0.0,
+  "tta": false,
+  "patience": 8,
+  "time_limit_min": 8,
+  "train_fraction": 1.0,
+  "seed": 0,
+  "num_workers": 4,
+  "amp": true
+ },
+ "seed": 0,
+ "code_commit": "f93006457f5e7e9a8a8827dc3ba959318f746d46",
+ "code_commit_how": "git rev-list -1 --before=<run created> HEAD (best effort: not recorded by the run)",
+ "run_created": "2026-10-31 13:59:14",
+ "original_val": 0.988,
+ "original_val_ci95": [
+  0.981,
+  0.994
+ ],
+ "metric": "accuracy",
+ "receipt_created": "2026-10-31 19:24:16",
+ "fingerprint": "a969712199346694"
+}

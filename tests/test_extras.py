@@ -41,6 +41,20 @@ def main():
     print(f"advisor OK: curve {[round(c['val_acc'], 3) for c in rep['curve']]}, "
           f"doctor recall {ld['recall_injected_at_K']:.2f}")
 
+    # P2 reproduce receipt: publish the base run, fingerprint it, retrain it, check
+    from gotrain import receipt
+    from gotrain.store import Store
+    v = Store().publish_run(rd.name, stage="candidate")["version"]
+    rec = receipt.make_receipt("m-eurosat", v)
+    assert set(rec["data_sha256"]) == {"train_X.npy", "train_y.npy", "valid_X.npy", "valid_y.npy"}
+    assert rec["fingerprint"] and rec["original_val_ci95"][0] <= rec["original_val"] <= rec["original_val_ci95"][1]
+    res = receipt.reproduce("m-eurosat", v, log=lambda *_: None)
+    assert res["data_hashes_match"] and res["reproduced_val"] is not None, res
+    assert res["verdict"] == "REPRODUCED", res          # same seed on CPU: deterministic, must land in the CI
+    assert json.loads(receipt.model_receipt("m-eurosat", v))["last_reproduce_check"]["verdict"] == "REPRODUCED"
+    assert sorted(p.name for p in (config.RUNS_DIR / "m-eurosat").iterdir()) == runs_before   # nothing written
+    print(f"receipt OK: {rec['fingerprint']} val {res['original_val']} -> {res['reproduced_val']}")
+
     # MCP: extras exposed to MCP only, not to the training agent
     from gotrain import mcp_server, tools
     names = {f.__name__ for f in mcp_server.EXTRA_TOOLS}

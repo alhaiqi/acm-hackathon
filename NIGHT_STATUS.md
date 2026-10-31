@@ -39,3 +39,11 @@ Times are UTC (Beirut = UTC+2). Newest entry at the bottom. Questions for Mohamm
   rewrote the verdict relative to the remaining error ("Both, cheapest first") and regenerated SUMMARY.md
   from the saved results (no retraining). Outputs copied to docs/advisor/m-eurosat/.
 - 19:20 Smoke test after P1: AGENT LOOP OK, store layout OK, ENGINE OK, EXTRAS OK. P1 DONE.
+- 19:26 P2 REPRODUCE RECEIPT demo on m-eurosat v1 (r003, production): fingerprint a969712199346694;
+  retrained in an isolated home (1.7 min) -> VALID 0.988 = original 0.988, inside CI [0.981, 0.994],
+  data hashes match -> REPRODUCED. Code differs (now bffec55, receipt f930064: reconstructed from git
+  history by the run's timestamp, labelled best effort). Files: docs/receipts/m-eurosat/.
+- Decision: the laptop ran out of memory (a waiter was killed, 1.1 GB free of 7.7). Cause: WSL VM holding
+  RAM. I now start WSL only for each smoke test and shut it down after; restarted the waiter because your
+  standing instruction requires one.
+- 19:40 Smoke test after P2: AGENT LOOP OK, store layout OK, ENGINE OK, EXTRAS OK (advisor + receipt). P2 DONE.
