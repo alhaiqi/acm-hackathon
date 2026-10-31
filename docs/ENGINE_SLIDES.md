@@ -1,8 +1,8 @@
 # GoTrain - engine slides (draft, Person A)
 
 Every number below comes from a real run on the team's SageMaker instance (Tesla T4 16 GB, real GEO-Bench
-data, Claude Sonnet on Bedrock), 31 Oct 2026. Sources are given so each number can be traced. GEO-Bench paper
-baselines are NOT included yet: look them up in the paper before adding them (never estimate them).
+data, Claude Sonnet on Bedrock), 31 Oct 2026. Sources are given so each number can be traced. GEO-Bench
+baselines come from the authors' published per-seed results (slide 2b), never estimated.
 
 ---
 
@@ -45,6 +45,45 @@ Honest note for the eurosat ensemble: its val (0.987) was below the best single 
 (0.979) below two of its members alone (0.981, 0.982). The agent's own reason was "near-tie within noise;
 averaging reduces seed variance" - stats confirm the tie (next slide), so it was a defensible but not a
 winning choice.
+
+---
+
+## 2b. Against the GEO-Bench baselines
+
+Source: the GEO-Bench authors' raw per-seed results, `baseline_classification_results.csv` and
+`baseline_segmentation_results.csv` in [ServiceNow/geo-bench](https://github.com/ServiceNow/geo-bench)
+(commit `5a5a763c5b`, 2024-01-15), for the paper Lacoste et al., *GEO-Bench: Toward Foundation Models for
+Earth Monitoring*, NeurIPS 2023 Datasets & Benchmarks ([arXiv 2306.03831](https://arxiv.org/abs/2306.03831)).
+The paper itself shows these only as plots (Fig. 9, Fig. 11). Rows: full training set ("1.00x train"),
+12 seeds per model, test metric mean ± SD; best baseline model per task.
+
+| Task | Best GEO-Bench baseline (12 seeds) | GoTrain test (1 look) | Difference |
+|---|---|---|---|
+| m-eurosat (acc.) | ResNet18-MoCo-S2, RGB: **0.9800 ± 0.0028** (max 0.985) | **0.979** | -0.001: on par, inside the baseline's seed spread |
+| m-pv4ger-seg (IoU) | ResNet18-U-Net: **0.9408 ± 0.0010** (max 0.9419) | **0.9556** | +0.015 (~15 baseline SDs) |
+| m-nz-cattle (IoU) | ResNet50-U-Net: **0.8107 ± 0.0020** (max 0.8138) | **0.857** ⚠ | +0.046 (65 test images: noisy) |
+
+Caveats, all of them material:
+- **Benchmark version**: the baselines ran on classification v0.8.5 / segmentation v0.4; we use v1.0.
+- **Inputs differ**: the eurosat baselines in the CSV at 1.00x are RGB-only (3 channels); ours uses all 13 bands.
+- **Metric**: the paper says "IoU" without stating the class averaging. Ours is the mean over both classes;
+  their pv4ger values (~0.94) fit a two-class mean better than panel-only IoU, but that is our inference.
+- **Seeds**: their numbers average 12 seeds; ours is one model (one test look), so a single draw.
+
+Honest summary: on eurosat we match the best baseline, we do not beat it; on both segmentation tasks the
+agent's U-Net + ConvNeXt-tiny clearly exceeds the published ResNet U-Nets.
+
+## 2c. Val -> test gap (does our selection overfit VALID?)
+
+| Task | GoTrain val | GoTrain test | gap | Baseline gap, same task (best model, 12 seeds) |
+|---|---|---|---|---|
+| m-eurosat | 0.987 (ensemble) | 0.979 | **-0.008** | -0.0016 ± 0.0030 |
+| m-pv4ger-seg | 0.9616 | 0.9556 | **-0.006** | -0.0058 ± 0.0009 |
+| m-nz-cattle | 0.860 | 0.857 | **-0.003** | -0.0044 ± 0.0009 |
+
+Reading: on both segmentation tasks our gap matches the baselines' (no sign of extra overfitting to VALID).
+On eurosat our gap is larger than the baselines' typical gap (-0.008 vs -0.002 ± 0.003): picking the top of
+7 runs that were statistically tied on VALID (slide 3) inflates the val score - the winner's curse.
 
 ---
 
@@ -182,5 +221,5 @@ instead of keys. When a bucket exists: `scripts/migrate_store_to_s3.sh` (copy + 
 
 - [ ] Day-2 results: m-brick-kiln, m-chesapeake (overnight, `scripts/launch_overnight.sh`, after B6)
 - [x] m-nz-cattle result: test 0.857 mIoU, labelled noisy
-- [ ] GEO-Bench paper baselines per task (look up, cite)
+- [x] GEO-Bench baselines (slide 2b, cited from the authors' per-seed CSVs) and val->test gaps (2c)
 - [x] S3: organisers want the local layout only (slide 11); no bucket needed
