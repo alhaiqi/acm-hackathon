@@ -336,3 +336,6 @@ def model_versions(task: str) -> str:
 ALL_TOOLS = [list_tasks, download_task, inspect_dataset, quick_probe, training_options, start_training, check_training,
              stop_training, leaderboard, read_run_log, record_insight, read_journal, write_custom_model,
              time_remaining, gpu_status, finalize_task, publish_run, push_dataset, model_versions]
+
+from gotrain.strategy import ALL_STRATEGY_TOOLS  # noqa: E402  (Brain side: tournament, noise rule, branches)
+ALL_TOOLS += ALL_STRATEGY_TOOLS
