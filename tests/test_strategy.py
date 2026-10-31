@@ -1,7 +1,8 @@
 """strategy.py graded on the fake runs (tests/make_fake_runs.py), whose true effects are known:
 
 - propose_candidates: the menu carries data-specific notes (SSL4EO matches 13 Sentinel-2 bands);
-- submit_shortlist: refuses unknown models, missing reasons and too few families (a Hub convnext is still
+- submit_shortlist: refuses without a stated use case and (arXiv tool on) a use-case literature search;
+  refuses unknown models, missing reasons and too few families (a Hub convnext is still
   the convnext family); adds the safe
   default; writes the reasoning to the journal; returns screen configs on 30% of the data;
 - race_decision: drops the clearly weak screen model; after the race picks branch A and a branch B
@@ -22,6 +23,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import make_fake_runs  # noqa: E402
 
+FEED = """<feed xmlns="http://www.w3.org/2005/Atom"><entry><id>http://arxiv.org/abs/1709.00029v2</id>
+<title>EuroSAT: A Novel Dataset and Deep Learning Benchmark for Land Use and Land Cover Classification</title>
+<published>2017-08-31T00:00:00Z</published><summary>Land use and land cover classification with Sentinel-2.</summary>
+</entry></feed>"""
+
 FACTS = {
     "m-eurosat": {"kind": "classification", "n_classes": 10, "bands": 13, "image_size": [64, 64],
                   "train_n": 2000, "valid_n": 1000, "known_issue": None},
@@ -32,7 +38,7 @@ FACTS = {
 
 def main():
     truths = make_fake_runs.main(Path(tempfile.mkdtemp(prefix="gotrain_strategy_")))
-    from gotrain import registry, strategy, tools
+    from gotrain import literature, registry, strategy, tools
     strategy.task_facts = lambda task: FACTS[task]          # fake runs have no dataset behind them
     j = json.loads
 
@@ -46,8 +52,19 @@ def main():
 
     # 2. the shortlist
     why = "13 Sentinel-2 bands: weights pretrained on the same sensor"
-    sub = lambda picks: j(strategy.submit_shortlist("m-eurosat", json.dumps(picks), json.dumps(
-        ["spectral: band values carry the signal", "spatial: shapes and texture carry it"])))
+    use = "land-use / land-cover classification of 64 px Sentinel-2 patches in Europe"
+    sub = lambda picks, use_case=use: j(strategy.submit_shortlist("m-eurosat", json.dumps(picks), json.dumps(
+        ["spectral: band values carry the signal", "spatial: shapes and texture carry it"]), use_case))
+    # the use case first: stated, and (arXiv tool on) searched in the literature
+    good = [{"name": "ssl4eo_resnet18", "why": why}, {"name": "convnext_tiny", "why": why}, {"name": "resnet18", "why": why}]
+    assert "use_case" in sub(good, "")["why"]
+    if literature.ENABLED:
+        assert "search_papers" in sub(good)["why"]
+        literature._fetch = lambda q, n: FEED
+        assert "refused" in j(literature.search_papers("m-eurosat", "land cover", angle="crops"))
+        literature.search_papers("m-eurosat", "land use classification Sentinel-2", angle="sensor")
+        assert "search_papers" in sub(good)["why"]                 # a sensor search is not the use-case search
+        literature.search_papers("m-eurosat", "land use land cover classification satellite", angle="use_case")
     assert sub([{"name": "vit_huge", "why": why}])["refused"]
     assert sub([{"name": "ssl4eo_resnet18", "why": ""}])["refused"]
     assert sub([{"name": "ssl4eo_resnet18", "why": why}, {"name": "ssl4eo_resnet50", "why": why}])["refused"]
@@ -57,6 +74,7 @@ def main():
     assert ok["added_safe_default"] == ["resnet18"] and len(ok["families"]) == 4, ok
     assert all(r["config"]["train_fraction"] == 0.3 for r in ok["screen_runs"])
     assert "MODEL SHORTLIST" in registry.read_journal("m-eurosat") and why in registry.read_journal("m-eurosat")
+    assert f"Use case: {use}" in registry.read_journal("m-eurosat")
     print("shortlist:", ok["accepted"])
 
     # 2b. a Hub model of a curated family does not count as a new family

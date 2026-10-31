@@ -2,7 +2,8 @@
 
 - plain words become an AND query restricted to vision / ML categories; arXiv syntax passes through;
 - the Atom feed is parsed into id, title, date, authors, category and a trimmed abstract;
-- each search is written to the journal; searches are capped per task; an unreachable arXiv is an
+- each search is written to the journal with its angle (use_case / sensor / method), and searched()
+  finds the use-case search there; searches are capped per task; an unreachable arXiv is an
   answer the agent can continue from, not a crash;
 - registered in tools.ALL_TOOLS.
 
@@ -33,6 +34,7 @@ def main():
     from gotrain import literature as L, registry, tools
     journal = []
     registry.journal = lambda task, text: journal.append((task, text))
+    registry.read_journal = lambda task: "\n".join(t for k, t in journal if k == task)
 
     # 1. query building
     q = L.build_query('Sentinel-2 "brick kiln"')
@@ -47,10 +49,15 @@ def main():
 
     # 3. tool: journal, cap, unreachable
     L._fetch = lambda q, n: FEED
-    r = json.loads(L.search_papers("m-brick-kiln", "brick kiln", 3))
+    assert json.loads(L.search_papers("m-brick-kiln", "brick kiln", angle="kilns"))["refused"]   # unknown angle
+    assert not L.searched("m-brick-kiln")
+    r = json.loads(L.search_papers("m-brick-kiln", "brick kiln", "sensor", 3))
     assert r["papers"][0]["arxiv_id"] == "2406.10723v3" and r["searches_left"] == L.MAX_CALLS - 1
-    assert journal[-1][0] == "m-brick-kiln" and "2406.10723v3" in journal[-1][1]
-    for _ in range(L.MAX_CALLS - 1):
+    assert journal[-1][0] == "m-brick-kiln" and journal[-1][1].startswith("LITERATURE SEARCH [sensor]")
+    assert "2406.10723v3" in journal[-1][1] and not L.searched("m-brick-kiln")       # sensor is not the use case
+    L.search_papers("m-brick-kiln", "brick kiln detection satellite", "use_case")
+    assert L.searched("m-brick-kiln") and not L.searched("m-eurosat")
+    for _ in range(L.MAX_CALLS - 2):
         L.search_papers("m-brick-kiln", "brick kiln")
     assert json.loads(L.search_papers("m-brick-kiln", "more"))["refused"]
     assert "papers" in json.loads(L.search_papers("m-eurosat", "eurosat"))           # the cap is per task
@@ -69,7 +76,7 @@ def main():
         import importlib
         L = importlib.reload(L)
         L.registry = registry
-        r = json.loads(L.search_papers("m-brick-kiln", '"brick kiln" detection', 3))
+        r = json.loads(L.search_papers("m-brick-kiln", '"brick kiln" detection', "use_case", 3))
         assert "papers" in r and r["papers"], r
         for p in r["papers"]:
             print(f"  {p['arxiv_id']}  {p['published']}  {p['title'][:80]}")

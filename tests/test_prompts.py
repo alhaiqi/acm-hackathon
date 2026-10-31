@@ -25,8 +25,10 @@ METRICS_FIELDS = {"top_confusions"}          # written by train.metrics_from_pro
 def main():
     from gotrain import prompts, strategy, tools
     from gotrain.train import DEFAULTS
-    names = {f.__name__ for f in tools.ALL_TOOLS}
-    args = {p for f in tools.ALL_TOOLS for p in inspect.signature(f).parameters}
+    from gotrain.literature import search_papers       # named by the prompt variant with literature, even if off here
+    every = list(tools.ALL_TOOLS) + [search_papers]
+    names = {f.__name__ for f in every}
+    args = {p for f in every for p in inspect.signature(f).parameters}
 
     # 1. prompts only name things that exist
     texts = {"system": prompts.build_system_prompt(True), "system_no_arxiv": prompts.build_system_prompt(False),
@@ -47,12 +49,13 @@ def main():
 
     # 3. the method in order, and the noise rule
     s = texts["system"]
-    order = ["inspect_dataset", "quick_probe", "search_papers", "COMPETING ASSUMPTIONS", "propose_candidates",
-             "submit_shortlist", "search_hf_models", "race_decision",
-             "branch_status", "compare_runs", "finalize_task"]
-    method = s[s.index("METHOD"):]
-    pos = [method.index(t) for t in order[:-1]] + [method.rindex("finalize_task")]
-    assert pos == sorted(pos), dict(zip(order, pos))
+    order = ["inspect_dataset", "quick_probe", "USE CASE", "search_papers", "COMPETING ASSUMPTIONS", "Step 2",
+             "propose_candidates", "submit_shortlist", "search_hf_models", "Step 3", "race_decision", "Step 5",
+             "branch_status", "compare_runs", "Step 6", "finalize_task"]
+    method, at = s[s.index("METHOD"):], 0
+    for t in order:                         # each step is named after the one before it
+        assert t in method[at:], (t, "missing or out of order")
+        at = method.index(t, at)
     rules = s[:s.index("METHOD")]
     assert "compare_runs" in rules and "Only a KEEP" in rules and "exactly once" in rules
 

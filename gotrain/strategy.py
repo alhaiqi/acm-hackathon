@@ -19,7 +19,7 @@ import json
 import math
 import time
 
-from . import config, registry, stats
+from . import config, literature, registry, stats
 from .train import CANDIDATE_POOL, DEFAULTS
 
 ALPHA = 0.05            # significance level of the paired test
@@ -181,8 +181,14 @@ def propose_candidates(task: str) -> str:
 
 
 # --------------------------------------------------------------------------- 2. the agent's picks
-def shortlist(task: str, picks: list[dict], assumptions: list[str], facts: dict) -> dict:
+def shortlist(task: str, picks: list[dict], assumptions: list[str], facts: dict, use_case: str = "") -> dict:
     kind = facts["kind"]
+    if len(use_case.strip()) < 15:
+        return {"refused": True, "why": "state use_case: the real-world problem this data serves and its target "
+                                        "objects (from the task name, class names, bands, resolution)"}
+    if literature.ENABLED and not literature.searched(task, "use_case"):
+        return {"refused": True, "why": "read the literature on this use case first: search_papers(task, query, "
+                                        "angle='use_case') with the words papers on it would use"}
     menu = {m["name"]: m for m in _menu(task, facts)}
     if not 1 <= len(picks) <= MAX_PICKS:
         return {"refused": True, "why": f"pick between {MIN_FAMILIES} and {MAX_PICKS} models"}
@@ -210,7 +216,7 @@ def shortlist(task: str, picks: list[dict], assumptions: list[str], facts: dict)
     screen = [{"name": p["name"], "config": {**pool[p["name"]]["config"], **SCREEN},
                "hypothesis": f"screen {p['name']}: {p['why']}"} for p in picks]
     _save_state(task, shortlist=picks, assumptions=assumptions)
-    lines = ["MODEL SHORTLIST (reasoned before any training)"]
+    lines = ["MODEL SHORTLIST (reasoned before any training)", f"Use case: {use_case.strip()}"]
     lines += [f"- {p['name']} ({menu[p['name']]['family']}): {p['why']}" + (f" | risk: {p['risk']}" if p.get("risk") else "")
               for p in picks]
     if assumptions:
@@ -221,7 +227,7 @@ def shortlist(task: str, picks: list[dict], assumptions: list[str], facts: dict)
             "next": "start_training each screen run (parent_run_id ''), one at a time; then race_decision(task)"}
 
 
-def submit_shortlist(task: str, picks_json: str, assumptions_json: str = "[]") -> str:
+def submit_shortlist(task: str, picks_json: str, assumptions_json: str = "[]", use_case: str = "") -> str:
     """Step 2 of the model tournament: submit the models you chose from propose_candidates, each with
     your reasoning. Checked against the rules (on the menu, feasible, at least 3 families; the safe
     default is added if missing), written to the journal, and turned into cheap screen configs.
@@ -232,12 +238,15 @@ def submit_shortlist(task: str, picks_json: str, assumptions_json: str = "[]") -
             spectral: weights pretrained on the same sensor", "risk": "slower to converge"}]'.
         assumptions_json: JSON list of the two competing assumptions about the data the branches will test,
             e.g. '["spectral: the band values carry the signal", "spatial: shapes and texture carry it"]'.
+        use_case: the real-world problem the data serves, e.g. "detect brick kilns (air-pollution sources)
+            in South Asia from 10 m Sentinel-2 images". Required; with the arXiv tool on, a use-case
+            search_papers must come first.
     """
     try:
         picks, assumptions = json.loads(picks_json), json.loads(assumptions_json or "[]")
     except json.JSONDecodeError as e:
         return _j({"refused": True, "why": f"not valid JSON: {e}"})
-    return _j(shortlist(task, picks, assumptions, task_facts(task)))
+    return _j(shortlist(task, picks, assumptions, task_facts(task), use_case))
 
 
 # --------------------------------------------------------------------------- 3. screen and race
