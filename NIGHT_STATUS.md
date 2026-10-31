@@ -47,3 +47,13 @@ Times are UTC (Beirut = UTC+2). Newest entry at the bottom. Questions for Mohamm
   RAM. I now start WSL only for each smoke test and shut it down after; restarted the waiter because your
   standing instruction requires one.
 - 19:40 Smoke test after P2: AGENT LOOP OK, store layout OK, ENGINE OK, EXTRAS OK (advisor + receipt). P2 DONE.
+- 19:46 B6 LANDED (Omar, B6a-B6g, 030384e: prompt follows tournament + branches, race fits budget,
+  branch memory, Hub trust rules, arXiv search tool). Features paused (no feature GPU job was running).
+- 19:48 SageMaker main checkout pulled to 030384e. smoke_test.sh: AGENT LOOP OK, store layout OK,
+  ENGINE OK. Omar's new tests: PROMPTS OK, STRATEGY OK, HUB RULES OK, LITERATURE OK.
+- 19:49 A8 LAUNCHED from a notebook kernel (busy kernel = activity for idle shutdown):
+  launch_overnight.sh -> its own smoke test, then m-brick-kiln (100 min) and m-chesapeake (150 min).
+  Expected end ~00:15 UTC. Checked every 30 min.
+- 19:50 P3 predict_geotiff code written and CPU-tested (fake GeoTIFF: output keeps CRS/transform,
+  2 bands, refusal on a missing band, opt-in fill with warning; rasterio-missing path returns a clear
+  message). Real Lebanon demo waits for the GPU (after A8).
