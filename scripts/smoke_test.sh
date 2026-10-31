@@ -8,5 +8,5 @@ python tests/make_fake_geobench.py "$GEO_BENCH_DIR"
 python -W ignore tests/test_agent_loop.py | grep -E "tool calls logged|AGENT LOOP OK"
 # engine contract, TTA, predict, ensemble finalize, store (fresh home: finalize locks are per task)
 export GOTRAIN_HOME=$T/home_engine
-python -W ignore tests/test_engine.py | grep -E "^(cls|seg|ensemble|segformer)|ENGINE OK"
+python -W ignore tests/test_engine.py | grep -E "^(cls|seg|ensemble|segformer|store)|ENGINE OK"
 echo "scratch dir: $T"

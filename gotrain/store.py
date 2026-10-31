@@ -1,9 +1,11 @@
 """Versioned storage for datasets and models: S3 when a bucket is configured, local folder otherwise.
 
-Layout (identical in S3 and locally, so switching is one environment variable):
-    datasets/<task>/<split>_X.npy, <split>_y.npy, meta.json, train_stats.json
+Rule: the path of a file relative to STORE_DIR IS its S3 key relative to s3://<bucket>/<prefix>/.
+Switching is one environment variable (GOTRAIN_S3_BUCKET); nothing else changes.
+    datasets/<task>/{train,valid}_{X,y}.npy, meta.json, train_stats.json    (never test_*: test stays local)
     models/<task>/v<N>/model.pt, config.json, metrics.json, history.jsonl, train.log
-    models/<task>/registry.json   list of versions: run, val score, test score, stage, time, lineage
+    models/<task>/registry.json   versions: run, val/test score, stage, lineage; files listed by KEY
+Nothing else is written under STORE_DIR (temporary files go to GOTRAIN_HOME/tmp).
 """
 from __future__ import annotations
 
@@ -45,7 +47,7 @@ class Store:
         return dst
 
     def put_json(self, obj, rel: str) -> str:
-        tmp = self.root / (rel + ".tmp")
+        tmp = config.HOME / "tmp" / rel.replace("/", "__")     # outside STORE_DIR: the store holds only keys
         tmp.parent.mkdir(parents=True, exist_ok=True)
         tmp.write_text(json.dumps(obj, indent=1))
         uri = self.put_file(tmp, rel)
@@ -63,8 +65,11 @@ class Store:
 
     # -- datasets
     def push_dataset(self, task: str) -> list[str]:
+        """Train/valid caches only. The test cache (built by finalize) never leaves this machine: a store is
+        for other machines to TRAIN from, and test must only ever be read by finalize."""
         d = config.CACHE_DIR / task
-        return [self.put_file(p, f"datasets/{task}/{p.name}") for p in sorted(d.glob("*")) if p.is_file()]
+        return [self.put_file(p, f"datasets/{task}/{p.name}") for p in sorted(d.glob("*"))
+                if p.is_file() and not p.name.startswith("test_")]
 
     def pull_dataset(self, task: str, files=("train_X.npy", "train_y.npy", "valid_X.npy", "valid_y.npy",
                                               "meta.json", "train_stats.json")) -> list[str]:
@@ -89,7 +94,9 @@ class Store:
             files = {}
             for name in ("model.pt", "config.json", "metrics.json", "history.jsonl", "train.log"):
                 if (rd / name).exists():
-                    files[name] = self.put_file(rd / name, f"models/{task}/v{n}/{name}")
+                    key = f"models/{task}/v{n}/{name}"
+                    self.put_file(rd / name, key)
+                    files[name] = key    # the key, not a local path or URI: same meaning locally and in S3
             entry = {"version": n, "run_id": run_id, "parent_run": info["parent"],
                      "val_score": (info["metrics"] or {}).get("val_score"),
                      "metric": (info["metrics"] or {}).get("primary_metric"),

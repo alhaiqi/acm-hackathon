@@ -103,6 +103,19 @@ def main():
     pulled = st.pull_model("m-eurosat")                      # newest production = v2
     assert pulled["version"] == 2 and all(__import__("os").path.exists(f) for f in pulled["files"]), pulled
 
+    # 8. the store maps 1:1 to S3: keys only, and test data never leaves the machine
+    import importlib.util
+    assert (config.CACHE_DIR / "m-eurosat" / "test_X.npy").exists()          # finalize built the test cache
+    pushed = st.push_dataset("m-eurosat")
+    assert pushed and not any("test_" in p for p in pushed), pushed
+    assert all(f == f"models/m-eurosat/v{v['version']}/{n}" for v in st.versions("m-eurosat") for n, f in v["files"].items())
+    spec = importlib.util.spec_from_file_location("csl", str(config.Path(__file__).resolve().parent.parent
+                                                          / "scripts" / "check_store_layout.py"))
+    csl = importlib.util.module_from_spec(spec); spec.loader.exec_module(csl)
+    _, problems, _ = csl.check(config.STORE_DIR)
+    assert not problems, problems
+    print("store layout OK")
+
     print("ENGINE OK")
 
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# A7: move the local model/dataset store to S3 once RASID gives the team a bucket and prefix.
+# A7: THE ONE-COMMAND PATH FOR WHEN A BUCKET EXISTS. Not needed for the hackathon (organisers: local
+# store only, laid out so it maps 1:1 to S3). Move the local model/dataset store to S3 once there is a bucket.
 #
 #   GOTRAIN_S3_BUCKET=<bucket> GOTRAIN_S3_PREFIX=<prefix> bash scripts/migrate_store_to_s3.sh
 #

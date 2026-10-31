@@ -75,9 +75,33 @@ training subset, and — through `write_custom_model` — its own PyTorch archit
 
 * **Model registry**: `publish_run` uploads checkpoint + config + metrics + logs as `models/<task>/v<N>/`
   and records version, lineage (parent run), val/test scores and stage (`candidate` → `production`).
-* **Datasets**: `push_dataset` uploads the prepared arrays to `datasets/<task>/` so another machine trains without re-processing.
-* **S3**: set `GOTRAIN_S3_BUCKET` (and optionally `GOTRAIN_S3_PREFIX`); without it the same layout is written locally.
-* **GoPilot integration**: `python -m gotrain.mcp_server` exposes the same 19 tools over MCP.
+* **Datasets**: `push_dataset` uploads the prepared train/valid arrays to `datasets/<task>/` so another machine trains without re-processing (the test cache is never exported).
+* **S3**: see *Storage layout* below; without a bucket the same layout is written locally.
+* **GoPilot integration**: `python -m gotrain.mcp_server` exposes the same 26 tools over MCP.
+
+## Storage layout (S3-ready, no code changes)
+
+**Rule: a file's path relative to `STORE_DIR` (`$GOTRAIN_HOME/store`) is its S3 key relative to
+`s3://<bucket>/<prefix>/`.** One environment variable switches to S3: `GOTRAIN_S3_BUCKET`
+(`GOTRAIN_S3_PREFIX` is optional, default `gotrain`). The store writes nothing else under `STORE_DIR`,
+and `registry.json` lists files by key, never by local path.
+
+```
+$GOTRAIN_HOME/store/                         s3://<bucket>/<prefix>/
+├── datasets/<task>/                         train/valid only: test never leaves the machine
+│   ├── train_X.npy  train_y.npy
+│   ├── valid_X.npy  valid_y.npy
+│   └── meta.json    train_stats.json
+└── models/<task>/
+    ├── registry.json                        versions: run, val/test score, stage, lineage, files (keys)
+    └── v<N>/
+        ├── model.pt     config.json     metrics.json
+        └── history.jsonl    train.log
+```
+
+Check it (filesystem only): `python scripts/check_store_layout.py` prints every file with its S3 key and
+fails on anything that would not map 1:1. When a bucket exists, `scripts/migrate_store_to_s3.sh` is the
+one-command path: copy the store, verify the registry reads back from S3, then keep `GOTRAIN_S3_BUCKET` set.
 
 ## Configuration
 
