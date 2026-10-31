@@ -150,7 +150,9 @@ def build_cache(task: str, split: str, allow_test: bool = False, workers: int = 
     n = len(ts.get_dataset(split=split, band_names=None))
     chunks = [(task, split, list(range(i, min(i + 64, n)))) for i in range(0, n, 64)]
     first_x, first_y = _load_chunk((task, split, [0]))[0]
-    X = np.lib.format.open_memmap(str(xp) + ".tmp.npy", mode="w+", dtype=first_x.dtype, shape=(n, *first_x.shape))
+    # m-brick-kiln ships float64: training reads float32 anyway, so halve the cache (6.4 GB -> 3.2 GB)
+    dtype = np.float32 if first_x.dtype == np.float64 else first_x.dtype
+    X = np.lib.format.open_memmap(str(xp) + ".tmp.npy", mode="w+", dtype=dtype, shape=(n, *first_x.shape))
     ys, misfit, k = [], 0, 0
     with ProcessPoolExecutor(max_workers=max(1, workers)) as pool:
         for res in pool.map(_load_chunk, chunks):
