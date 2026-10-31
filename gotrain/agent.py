@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 
 from . import config, tools
 from .guards import GoTrainGuards, ToolCallLog
-from .prompts import SYSTEM_PROMPT, task_prompt
+from .prompts import SYSTEM_PROMPT, resume_prompt, task_prompt
 
 ToolLogger = ToolCallLog   # old name
 
@@ -116,9 +116,7 @@ def run_task(task: str, budget_min: float, session_dir, model=None, valid_only: 
         # normal mode keeps ~4 min for finalize; a valid-only experiment uses the whole budget (as its baseline does)
         if done() or left() < (1 if valid_only else 4) or resumes > 25:
             break
-        prompt = (f"You have {left():.0f} minutes left for {task}. Read read_journal and leaderboard, then "
-                  + ("continue the search (validation only, no finalize)." if valid_only else
-                     "continue the search; you have not finalized: finalize before time runs out."))
+        prompt = resume_prompt(task, left(), valid_only)
     # safety net: if the model ended without finalizing, finalize the best VALID run (never in valid_only mode)
     if not valid_only and not (config.RESULTS_DIR / f"{task}.lock.json").exists():
         from .finalize import finalize

@@ -1,8 +1,8 @@
 # GoTrain - engine slides (draft, Person A)
 
 Every number below comes from a real run on the team's SageMaker instance (Tesla T4 16 GB, real GEO-Bench
-data, Claude Sonnet on Bedrock), 31 Oct 2026. Sources are given so each number can be traced. GEO-Bench paper
-baselines are NOT included yet: look them up in the paper before adding them (never estimate them).
+data, Claude Sonnet on Bedrock), 31 Oct 2026. Sources are given so each number can be traced. GEO-Bench
+baselines come from the authors' published per-seed results (slide 2b), never estimated.
 
 ---
 
@@ -48,6 +48,69 @@ winning choice.
 
 ---
 
+## 2b. Against the GEO-Bench baselines
+
+Source: the GEO-Bench authors' raw per-seed results, `baseline_classification_results.csv` and
+`baseline_segmentation_results.csv` in [ServiceNow/geo-bench](https://github.com/ServiceNow/geo-bench)
+(commit `5a5a763c5b`, 2024-01-15), for the paper Lacoste et al., *GEO-Bench: Toward Foundation Models for
+Earth Monitoring*, NeurIPS 2023 Datasets & Benchmarks ([arXiv 2306.03831](https://arxiv.org/abs/2306.03831)).
+The paper itself shows these only as plots (Fig. 9, Fig. 11). Rows: full training set ("1.00x train"),
+12 seeds per model, test metric mean ± SD; best baseline model per task.
+
+| Task | Best GEO-Bench baseline (12 seeds) | GoTrain test (1 look) | Difference |
+|---|---|---|---|
+| m-eurosat (acc.) | ResNet18-MoCo-S2, RGB: **0.9800 ± 0.0028** (max 0.985) | **0.979** | -0.001: on par, inside the baseline's seed spread |
+| m-pv4ger-seg (IoU) | ResNet18-U-Net: **0.9408 ± 0.0010** (max 0.9419) | **0.9556** | +0.015 (~15 baseline SDs) |
+| m-nz-cattle (IoU) | ResNet50-U-Net: **0.8107 ± 0.0020** (max 0.8138) | **0.857** ⚠ | +0.046 (65 test images: noisy) |
+
+Caveats, all of them material:
+- **Benchmark version**: the baselines ran on classification v0.8.5 / segmentation v0.4; we use v1.0.
+- **Inputs differ**: the eurosat baselines in the CSV at 1.00x are RGB-only (3 channels); ours uses all 13 bands.
+- **Metric**: the paper says "IoU" without stating the class averaging. Ours is the mean over both classes;
+  their pv4ger values (~0.94) fit a two-class mean better than panel-only IoU, but that is our inference.
+- **Seeds**: their numbers average 12 seeds; ours is one model (one test look), so a single draw.
+
+Honest summary: on eurosat we match the best baseline, we do not beat it; on both segmentation tasks the
+agent's U-Net + ConvNeXt-tiny clearly exceeds the published ResNet U-Nets.
+
+## 2c. Val -> test gap (does our selection overfit VALID?)
+
+| Task | GoTrain val | GoTrain test | gap | Baseline gap, same task (best model, 12 seeds) |
+|---|---|---|---|---|
+| m-eurosat | 0.987 (ensemble) | 0.979 | **-0.008** | -0.0016 ± 0.0030 |
+| m-pv4ger-seg | 0.9616 | 0.9556 | **-0.006** | -0.0058 ± 0.0009 |
+| m-nz-cattle | 0.860 | 0.857 | **-0.003** | -0.0044 ± 0.0009 |
+
+Reading: on both segmentation tasks our gap matches the baselines' (no sign of extra overfitting to VALID).
+On eurosat our gap is larger than the baselines' typical gap (-0.008 vs -0.002 ± 0.003): picking the top of
+7 runs that were statistically tied on VALID (slide 3) inflates the val score - the winner's curse.
+
+---
+
+## 2d. Is the agent better than random search? (m-eurosat, VALID only)
+
+Same task, same trainer, same 60-min wall clock each, one run at a time on the T4, run one after the other
+(16:57-18:54 UTC). Random search samples the agent's own menu (curated backbones, img size, lr, epochs,
+augmentation, label smoothing, mixup, TTA). Isolated homes with TRAIN/VALID links only; the agent ran with
+`--valid-only` (guard cancels finalize). **No lock file was created; test was never read.**
+
+| | Agent (Claude) | Random search |
+|---|---|---|
+| runs finished in 60 min | 15 | 29 |
+| best VALID accuracy | **0.991** [95% CI 0.985, 0.996] | **0.986** [0.979, 0.993] |
+| best config | SSL4EO ResNet50, 128 px, TTA, 40 ep | SSL4EO ResNet18, 128 px, TTA, 30 ep |
+| best reached | run 14, ~48 min | run 2, ~0.7 min (lucky early draw) |
+| median run | 0.986 | 0.978 |
+| runs >= 0.984 | 11 / 15 | 8 / 29 |
+
+Paired test, agent best vs random best (same 1000 val images, McNemar): **+0.005 [-0.001, +0.011], p = 0.18**
+-> **not significant**. Honest reading: with one hour each, the agent's best is not distinguishable from
+random search's best. What the agent does better is *consistency*: its typical run is ~0.8 pts higher
+(median 0.986 vs 0.978) and 73% of its runs reach 0.984 vs 28% for random, with half as many runs
+(it spends time thinking and trains larger models). Caveat: one repetition of each method on one task.
+
+---
+
 ## 3. Evidence, not leaderboard noise (stats.py on the real VALID predictions)
 
 **m-eurosat** (1000 val images): best run 0.988, 95% CI [0.981, 0.994]. Paired McNemar vs the next runs:
@@ -62,6 +125,29 @@ p = 1.0, 0.77, 0.34, 0.21 -> **the top 5 runs are statistically tied**.
 | ResNet34 U-Net baseline (r002) | +0.0067 | [+0.0043, +0.0095] | 0.001 |
 
 Message: "+0.2 points" that other teams would report as progress is noise here; we can say which gains are real.
+
+**Seed noise, measured** (m-eurosat, chosen config r003 = SSL4EO ResNet50 @128 px, retrained with 2 more seeds,
+VALID only, isolated home): 0.988 / 0.985 / 0.988 -> **mean 0.987 +- 0.0017 SD**. The 0.003 spread between
+seeds is the same size as the gaps between the top runs: another reason those runs are a tie.
+
+---
+
+## 3b. Data Advisor: model or data? (m-eurosat, real GPU run, 12 min, VALID only)
+
+Config of the best run (r003), equal compute per point (960 optimizer steps), nested subsets of TRAIN:
+
+| TRAIN used | 200 (10%) | 500 (25%) | 1000 (50%) | 2000 (100%) |
+|---|---|---|---|---|
+| VALID acc | 0.941 | 0.964 | 0.978 | 0.984 |
+
+- Power law on the error fits (r2 0.995). **2x labels -> +0.56 pts [+0.30, +0.84]**: real, and ~35% of the remaining
+  1.6% error, but it costs 2000 new labels.
+- **Label doctor** (2-fold out-of-fold on TRAIN): 40 labels flipped on purpose -> it found **all 40** in its top 80.
+  57 natural suspects (2.9% of TRAIN) in a thumbnail gallery: the cheapest thing to fix first.
+- **Labeling queue** (most uncertain first): +100 uncertain vs +100 random -> +0.60 pts [-0.10, +1.30], **p 0.15:
+  not significant** - honest result: uncertainty sampling did not clearly beat random here.
+- Verdict: both, cheapest first: re-check the 57 suspects, then labels/model. Exposed to GoPilot via MCP
+  (`data_advisor_report`), not to the training agent. Outputs: `docs/advisor/m-eurosat/` on branch feature/extras.
 
 ---
 
@@ -182,5 +268,5 @@ instead of keys. When a bucket exists: `scripts/migrate_store_to_s3.sh` (copy + 
 
 - [ ] Day-2 results: m-brick-kiln, m-chesapeake (overnight, `scripts/launch_overnight.sh`, after B6)
 - [x] m-nz-cattle result: test 0.857 mIoU, labelled noisy
-- [ ] GEO-Bench paper baselines per task (look up, cite)
+- [x] GEO-Bench baselines (slide 2b, cited from the authors' per-seed CSVs) and val->test gaps (2c)
 - [x] S3: organisers want the local layout only (slide 11); no bucket needed
