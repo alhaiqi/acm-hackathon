@@ -79,7 +79,9 @@ if __name__ == "__main__":
     calls = [json.loads(l) for l in (session / "tool_calls.jsonl").read_text().splitlines()]
     print(len(calls), "tool calls logged:", [c["tool"] for c in calls])
     second = [c for c in calls if c["tool"] == "finalize_task"][-1]
-    assert '"refused": true' in second["result"], second
+    # refused twice over: by the Strands guard hook (before the tool runs) or, without it, by finalize itself
+    assert '"refused": true' in second["result"] or "refused by guard" in second["result"], second
+    assert second["cancelled"], "the guard hook should cancel the second finalize before it runs"
     assert (session / "m-pv4ger-seg_autofinalize.json").exists()
     assert json.loads((config.RESULTS_DIR / "m-pv4ger-seg.json").read_text())["test_score"] >= 0
     print("AGENT LOOP OK")

@@ -28,6 +28,8 @@ Phase 3 - Screen ideas cheaply: test promising single changes, one at a time, id
   Good axes, in rough priority: backbone size/family, input resolution (img_size), learning rate,
   augmentation, loss / class weights, band subset (an ablation tells you if non-RGB bands help),
   normalization, epochs. For hard problems you may write_custom_model.
+  If no curated backbone fits the data, search the Hugging Face Hub (search_hf_models, then
+  add_hf_candidate): it refuses models trained on GEO-Bench source data, which would leak test images.
 Phase 4 - Exploit: combine the winning changes on FULL data. Keep the best two branches alive
   (tree search): if a branch fails twice, return to the other. Kill runs that are clearly losing
   (stop_training) to save time.
