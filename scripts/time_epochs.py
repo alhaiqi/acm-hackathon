@@ -15,28 +15,33 @@ from gotrain import config
 from gotrain.registry import new_run
 from gotrain.train import DEFAULTS, run
 
-ap = argparse.ArgumentParser()
-ap.add_argument("tasks", nargs="*", default=["m-eurosat", "m-pv4ger-seg", "m-brick-kiln", "m-nz-cattle"])
-ap.add_argument("--config", default="{}", help="JSON overrides, same as start_training")
-ap.add_argument("--epochs", type=int, default=3)
-a = ap.parse_args()
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("tasks", nargs="*", default=["m-eurosat", "m-pv4ger-seg", "m-brick-kiln", "m-nz-cattle"])
+    ap.add_argument("--config", default="{}", help="JSON overrides, same as start_training")
+    ap.add_argument("--epochs", type=int, default=3)
+    a = ap.parse_args()
 
-out_path = config.RESULTS_DIR / "timing.json"
-timing = json.loads(out_path.read_text()) if out_path.exists() else {}
-full_epochs = json.loads(a.config).get("epochs", DEFAULTS["epochs"])
-for t in a.tasks:
-    cfg = {**json.loads(a.config), "epochs": a.epochs, "patience": 99}
-    rd = new_run(t, cfg, hypothesis="timing run (A3), not a search step", parent=None)
-    try:
-        run(rd)
-    except SystemExit:
-        print(f"FAILED {t}: see {rd / 'train.log'}")
-        continue
-    secs = [json.loads(l)["sec"] for l in (rd / "history.jsonl").read_text().splitlines()]
-    per = statistics.median(secs[1:] or secs)          # epoch 1 includes cuDNN warm-up
-    timing[t] = {"run_id": rd.name, "config": cfg, "sec_per_epoch": per, "epoch_secs": secs,
-                 f"min_for_{full_epochs}_epochs": round(per * full_epochs / 60, 1),
-                 "min_for_30pct_subset_10_epochs": round(per * 0.3 * 10 / 60, 1)}
-    print(t, json.dumps(timing[t]), flush=True)
-out_path.write_text(json.dumps(timing, indent=1))
-print("wrote", out_path)
+    out_path = config.RESULTS_DIR / "timing.json"
+    timing = json.loads(out_path.read_text()) if out_path.exists() else {}
+    full_epochs = json.loads(a.config).get("epochs", DEFAULTS["epochs"])
+    for t in a.tasks:
+        cfg = {**json.loads(a.config), "epochs": a.epochs, "patience": 99}
+        rd = new_run(t, cfg, hypothesis="timing run (A3), not a search step", parent=None)
+        try:
+            run(rd)
+        except SystemExit:
+            print(f"FAILED {t}: see {rd / 'train.log'}")
+            continue
+        secs = [json.loads(l)["sec"] for l in (rd / "history.jsonl").read_text().splitlines()]
+        per = statistics.median(secs[1:] or secs)          # epoch 1 includes cuDNN warm-up
+        timing[t] = {"run_id": rd.name, "config": cfg, "sec_per_epoch": per, "epoch_secs": secs,
+                     f"min_for_{full_epochs}_epochs": round(per * full_epochs / 60, 1),
+                     "min_for_30pct_subset_10_epochs": round(per * 0.3 * 10 / 60, 1)}
+        print(t, json.dumps(timing[t]), flush=True)
+    out_path.write_text(json.dumps(timing, indent=1))
+    print("wrote", out_path)
+
+
+if __name__ == "__main__":   # cache workers re-import this file under spawn (Windows/macOS)
+    main()

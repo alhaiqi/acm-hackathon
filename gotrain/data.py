@@ -87,8 +87,8 @@ def task_meta(task: str) -> dict:
         "n_classes": int(lt.n_classes),
         "class_names": list(names) if names else None,
         "bands": [str(b.name) for b in ts.bands_info],
-        "patch_size": list(ts.patch_size) if ts.patch_size else None,
-        "resolution_m": ts.spatial_resolution,
+        "patch_size": [int(v) for v in ts.patch_size] if ts.patch_size else None,
+        "resolution_m": None if ts.spatial_resolution is None else float(ts.spatial_resolution),  # numpy int64 in real specs
         "known_issue": KNOWN_BAND_ORDER_ISSUES.get(task),
     }
 
@@ -191,15 +191,26 @@ def channel_stats(task: str, max_samples: int = 2000) -> dict:
     X, _ = load_split(task, "train")
     rng = np.random.default_rng(0)
     idx = np.sort(rng.choice(len(X), size=min(max_samples, len(X)), replace=False))
-    sub = np.asarray(X[idx], dtype=np.float64)                              # (n, C, H, W)
-    flat = np.moveaxis(sub, 1, 0).reshape(sub.shape[1], -1)
+    # Streamed in chunks: 2000 large images as float64 do not fit in RAM (pv4ger-seg alone would be ~5 GB).
+    # mean/std/min/max are exact over the sampled images; percentiles come from <= 2M pixels per channel.
+    C = X.shape[1]
+    keep = max(1, 2_000_000 // len(idx))
+    s1, s2, n = np.zeros(C), np.zeros(C), 0
+    lo, hi, pix = np.full(C, np.inf), np.full(C, -np.inf), []
+    for i in range(0, len(idx), 64):
+        flat = np.moveaxis(np.asarray(X[idx[i:i + 64]], dtype=np.float64), 1, 0).reshape(C, -1)
+        s1 += flat.sum(1); s2 += (flat ** 2).sum(1); n += flat.shape[1]
+        lo, hi = np.minimum(lo, flat.min(1)), np.maximum(hi, flat.max(1))
+        pix.append(flat[:, rng.choice(flat.shape[1], size=min(flat.shape[1], keep * len(idx[i:i + 64])), replace=False)])
+    pix = np.concatenate(pix, 1)
+    mean = s1 / n
     st = {
-        "mean": flat.mean(1).tolist(),
-        "std": (flat.std(1) + 1e-6).tolist(),
-        "min": flat.min(1).tolist(),
-        "max": flat.max(1).tolist(),
-        "p01": np.percentile(flat, 1, axis=1).tolist(),
-        "p99": np.percentile(flat, 99, axis=1).tolist(),
+        "mean": mean.tolist(),
+        "std": (np.sqrt(np.maximum(s2 / n - mean ** 2, 0)) + 1e-6).tolist(),
+        "min": lo.tolist(),
+        "max": hi.tolist(),
+        "p01": np.percentile(pix, 1, axis=1).tolist(),
+        "p99": np.percentile(pix, 99, axis=1).tolist(),
     }
     p.write_text(json.dumps(st))
     return st

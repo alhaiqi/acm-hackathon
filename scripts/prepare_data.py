@@ -11,16 +11,21 @@ import time
 
 from gotrain import data
 
-TASKS = sys.argv[1:] or ["m-eurosat", "m-pv4ger-seg", "m-brick-kiln", "m-nz-cattle"]
+def main():
+    TASKS = sys.argv[1:] or ["m-eurosat", "m-pv4ger-seg", "m-brick-kiln", "m-nz-cattle"]
 
-for t in TASKS:
-    t0 = time.time()
-    try:
-        print(data.download_task(t), flush=True)
-        for split in ("train", "valid"):
-            print(" ", data.build_cache(t, split), flush=True)
-        d = data.describe(t)
-        print(f"OK {t}: {d['kind']}, {d['n_classes']} classes, input {d['input_shape_CHW']} {d['dtype']}, "
-              f"train {d['train_n']} valid {d['valid_n']} ({time.time() - t0:.0f}s)", flush=True)
-    except Exception as e:
-        print(f"FAILED {t}: {type(e).__name__}: {e}", flush=True)
+    for t in TASKS:
+        t0 = time.time()
+        try:
+            print(data.download_task(t), flush=True)
+            for split in ("train", "valid"):
+                print(" ", data.build_cache(t, split), flush=True)
+            d = data.describe(t)
+            print(f"OK {t}: {d['kind']}, {d['n_classes']} classes, input {d['input_shape_CHW']} {d['dtype']}, "
+                  f"train {d['train_n']} valid {d['valid_n']} ({time.time() - t0:.0f}s)", flush=True)
+        except Exception as e:
+            print(f"FAILED {t}: {type(e).__name__}: {e}", flush=True)
+
+
+if __name__ == "__main__":   # cache workers re-import this file under spawn (Windows/macOS)
+    main()
