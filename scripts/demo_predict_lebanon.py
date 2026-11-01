@@ -70,7 +70,10 @@ def main():
     item = find_scene(a.bbox)
     out_dir = config.HOME / "inference"; out_dir.mkdir(parents=True, exist_ok=True)
     tif = out_dir / f"lebanon_{item['id']}.tif"
-    order, shape, crs = build_geotiff(item, a.bbox, tif)
+    import rasterio
+    # public bucket: read anonymously, never with the instance's AWS role (signed requests get AccessDenied)
+    with rasterio.Env(AWS_NO_SIGN_REQUEST="YES"):
+        order, shape, crs = build_geotiff(item, a.bbox, tif)
     print(f"scene {item['id']} cloud {item['properties']['eo:cloud_cover']}% -> {tif} {shape} {crs} bands {order}")
     print("\n--- 1) default rules ---")
     print(predict_geotiff(str(tif), task=a.task))
