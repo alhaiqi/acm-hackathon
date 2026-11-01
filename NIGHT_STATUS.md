@@ -87,3 +87,11 @@ Times are UTC (Beirut = UTC+2). Newest entry at the bottom. Questions for Mohamm
   Sentinel-2 bucket with the instance's role -> AccessDenied. Fix: anonymous read (AWS_NO_SIGN_REQUEST=YES,
   no credentials, no AWS service touched), 8c9f811. Smoke before the demo: AGENT LOOP OK, ENGINE OK.
   03:08 demo relaunched on the GPU from a notebook kernel; one light checker (job) running.
+- 03:05 P3 demo attempt 2 read a scene whose pixels over Zahle are nodata (input median 0 in every band). The range
+  check flagged it; the "100% Forest" output was discarded. Cause: Earth Search's old `sentinel-2-l2a` items now
+  point to a requester-pays bucket, and that pass had no data over the bbox. Fix (88ca3fd): collection 1
+  (`sentinel-2-c1-l2a`, public COGs) and skip scenes empty over the bbox. EXTRAS OK on fake data before the rerun.
+- 03:08 **P3 real demo DONE** (docs/inference/m-eurosat/): scene S2B_T37SBT_20240718 (cloud 0.0008%). Default rules
+  -> REFUSED (B10 missing). Opt-in fill -> GeoTIFF + PNG in 8 s, Annual Crop 95%, mean confidence 74%, range
+  warnings on 6 bands (L2A vs L1C). Honest: the town is mislabelled as crop; the confidence drops to ~40-60% there.
+  Smoke after: AGENT LOOP OK, store layout OK, ENGINE OK. P3 complete.
