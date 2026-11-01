@@ -1,0 +1,103 @@
+scene S2A_T36SYC_20240901T082754_L2A: no data over the bbox (edge of the satellite pass) - next scene
+scene S2A_T37SBT_20240901T082754_L2A: no data over the bbox (edge of the satellite pass) - next scene
+scene S2B_T37SBT_20240718T082953_L2A cloud 0.000816% -> /home/sagemaker-user/gotrain_home/inference/lebanon_S2B_T37SBT_20240718T082953_L2A.tif (571, 572) EPSG:32637 bands ['B01', 'B02', 'B03', 'B04', 'B05', 'B06', 'B07', 'B08', 'B8A', 'B09', 'B11', 'B12']
+
+--- 1) default rules ---
+{
+ "refused": true,
+ "why": "input lacks bands the model was trained on: ['B10']",
+ "model_bands": [
+  "B01",
+  "B02",
+  "B03",
+  "B04",
+  "B05",
+  "B06",
+  "B07",
+  "B08",
+  "B09",
+  "B10",
+  "B11",
+  "B12",
+  "B8A"
+ ],
+ "input_bands": [
+  "B01",
+  "B02",
+  "B03",
+  "B04",
+  "B05",
+  "B06",
+  "B07",
+  "B08",
+  "B8A",
+  "B09",
+  "B11",
+  "B12"
+ ],
+ "hint": "provide them, or pass fill_missing to fill them with the training mean (less reliable)"
+}
+
+--- 2) fill_missing='B10' (explicit opt-in) ---
+{
+ "input": "/home/sagemaker-user/gotrain_home/inference/lebanon_S2B_T37SBT_20240718T082953_L2A.tif",
+ "crs": "EPSG:32637",
+ "transform": [
+  10.0,
+  0.0,
+  209360.0,
+  0.0,
+  -10.0,
+  3752180.0
+ ],
+ "shape": [
+  12,
+  571,
+  572
+ ],
+ "models": [
+  {
+   "version": 1,
+   "run_id": "m-eurosat__r003",
+   "stage": "production"
+  },
+  {
+   "version": 2,
+   "run_id": "m-eurosat__r007",
+   "stage": "production"
+  },
+  {
+   "version": 3,
+   "run_id": "m-eurosat__r004",
+   "stage": "production"
+  }
+ ],
+ "warnings": [
+  "WARNING bands filled with the training mean (not observed): ['B10']",
+  "WARNING value range differs from the training data. Possible causes: L2A surface reflectance (with the +1000 offset of processing baseline >= 04.00) vs L1C top-of-atmosphere, or a different scale. Predictions may be unreliable:",
+  "B03: input median 2527 vs TRAIN mean 1055 (p01-p99 460-2352)",
+  "B04: input median 3027 vs TRAIN mean 957 (p01-p99 243-2839)",
+  "B05: input median 3367 vs TRAIN mean 1220 (p01-p99 204-2824)",
+  "B09: input median 4218 vs TRAIN mean 751 (p01-p99 58-1890)",
+  "B11: input median 4518 vs TRAIN mean 1849 (p01-p99 23-4146)",
+  "B12: input median 3851 vs TRAIN mean 1131 (p01-p99 12-3070)"
+ ],
+ "filled_bands": [
+  "B10"
+ ],
+ "tiling": {
+  "window": 64,
+  "stride": 32,
+  "windows": 289
+ },
+ "class_area": {
+  "Annual Crop": 0.951,
+  "Industrial Buildings": 0.0249,
+  "Highway": 0.0241
+ },
+ "mean_confidence_pct": 74.45137349515633,
+ "output_geotiff": "/home/sagemaker-user/gotrain_home/inference/lebanon_S2B_T37SBT_20240718T082953_L2A/lebanon_S2B_T37SBT_20240718T082953_L2A_m-eurosat_pred.tif",
+ "preview_png": "/home/sagemaker-user/gotrain_home/inference/lebanon_S2B_T37SBT_20240718T082953_L2A/lebanon_S2B_T37SBT_20240718T082953_L2A_m-eurosat_preview.png",
+ "seconds": 8.0
+}
+DEMO DONE

@@ -1,0 +1,23 @@
+{
+ "task": "m-eurosat",
+ "version": 1,
+ "fingerprint": "a969712199346694",
+ "original_val": 0.988,
+ "original_ci95": [
+  0.981,
+  0.994
+ ],
+ "reproduced_val": 0.988,
+ "inside_ci": true,
+ "data_hashes_match": true,
+ "code_now": "bffec550de3172415c2f6bde87ee1c44f3c58351",
+ "code_at_receipt": "f93006457f5e7e9a8a8827dc3ba959318f746d46",
+ "same_code": false,
+ "minutes": 1.7,
+ "verdict": "REPRODUCED",
+ "run_dir": "/home/sagemaker-user/gotrain_home/experiments/reproduce_m-eurosat_v1_192417/runs/m-eurosat/m-eurosat__r001",
+ "train_tail": [
+  "early stop: 8 epochs without a better val accuracy",
+  "DONE best val accuracy 0.9880 at epoch 19"
+ ]
+}
