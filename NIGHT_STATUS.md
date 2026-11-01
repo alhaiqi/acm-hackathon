@@ -95,3 +95,30 @@ Times are UTC (Beirut = UTC+2). Newest entry at the bottom. Questions for Mohamm
   -> REFUSED (B10 missing). Opt-in fill -> GeoTIFF + PNG in 8 s, Annual Crop 95%, mean confidence 74%, range
   warnings on 6 bands (L2A vs L1C). Honest: the town is mislabelled as crop; the confidence drops to ~40-60% there.
   Smoke after: AGENT LOOP OK, store layout OK, ENGINE OK. P3 complete.
+
+## Morning summary (03:15 UTC, 1 Nov)
+
+**Test scores (test split read exactly once per task, via finalize):**
+
+| Task | Metric | Test | Val | Best GEO-Bench baseline (12 seeds) | vs baseline |
+|---|---|---|---|---|---|
+| m-eurosat | acc. | 0.979 | 0.987 | 0.9800 ± 0.0028 | on par |
+| m-pv4ger-seg | mIoU | 0.9556 | 0.9616 | 0.9408 ± 0.0010 | +0.015 |
+| m-brick-kiln | acc. | 0.983 | 0.992 | 0.9887 ± 0.0013 | **-0.006 (below)** |
+| m-chesapeake | mIoU | 0.751 | 0.770 | 0.7112 ± 0.0034 | +0.040 |
+| m-nz-cattle (extra dataset) | mIoU | 0.857 ⚠ noisy | 0.860 | 0.8107 ± 0.0020 | +0.046 |
+
+**Extras (feature/extras, MCP-only, not merged to main):** P1 Data Advisor (2x labels -> +0.56 pts, 40/40 injected
+flips found), P2 Reproduce receipt (eurosat v1 REPRODUCED 0.988 -> 0.988), P3 predict_geotiff (real Zahle demo:
+refusal, opt-in fill, warnings; map wrong over the town, flagged by low confidence). Experiments: agent vs random
+(0.991 vs 0.986, p 0.18, not significant), eurosat seed noise ± 0.0017. Store layout: LAYOUT OK, 5 tasks published.
+
+**Done overnight:** A8 (both day-2 tasks, agent-finalized), baselines + val->test gaps for all 5 tasks
+(slides 2/2b/2c), P3 demo + slide 3d, session renewed (mine to ~14:56 UTC).
+
+**Left for the presentation:**
+- Build the deck from docs/ENGINE_SLIDES.md + Omar's Brain slides (main, d35b5a1).
+- Decide whether feature/extras is merged to main (your call; I did not merge).
+- Optional: brick-kiln is our one below-baseline task. The agent stopped at ConvNeXt-tiny @128 px; the baseline
+  winner is ConvNeXt-B. Nothing more can be done on test (already used); say it honestly on slide 2b.
+- Note: Omar pushed B6i (6f8175f) after A8 started, so A8 ran on B6 up to 030384e.
