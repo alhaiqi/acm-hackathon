@@ -32,8 +32,12 @@ val_preds.npz, history.jsonl` (WORK_SPLIT.md section 1).
 | m-eurosat | accuracy | **0.979** | 0.987 | ensemble of 3 SSL4EO ResNet50 @128 px | 7 | `results/m-eurosat.json` |
 | m-pv4ger-seg | mIoU | **0.9556** | 0.9616 | U-Net + ConvNeXt-tiny, 8-way TTA | 5 | `results/m-pv4ger-seg.json` |
 | m-nz-cattle (extra) | mIoU | **0.857** ⚠ noisy | 0.860 | U-Net + ConvNeXt-tiny, 640 px, TTA | 5 | `results/m-nz-cattle.json` |
-| m-brick-kiln | accuracy | *day 2* | | | | test untouched |
-| m-chesapeake | mIoU | *day 2* | | | | test untouched |
+| m-brick-kiln | accuracy | **0.983** | 0.992 | ConvNeXt-tiny @128 px, mixup 0.2, 12 epochs | 16 | `results/m-brick-kiln.json` |
+| m-chesapeake | mIoU | **0.751** | 0.770 | U-Net + ConvNeXt-tiny, CE+Dice, TTA, 12 epochs | 15 | `results/m-chesapeake.json` |
+
+m-brick-kiln and m-chesapeake ran overnight (A8, `scripts/launch_overnight.sh`, 100 / 150 min, agent with B6 tools),
+each finalized by the agent itself (no auto-finalize). m-chesapeake per-class test IoU: 0.938 / 0.968 / 0.839 /
+0.785 / **0.533 / 0.603 / 0.593** (the three rare classes are the weak point).
 
 pv4ger-seg per-class test IoU: no solar 0.984, **solar panels 0.927**.
 
@@ -62,6 +66,8 @@ The paper itself shows these only as plots (Fig. 9, Fig. 11). Rows: full trainin
 | m-eurosat (acc.) | ResNet18-MoCo-S2, RGB: **0.9800 ± 0.0028** (max 0.985) | **0.979** | -0.001: on par, inside the baseline's seed spread |
 | m-pv4ger-seg (IoU) | ResNet18-U-Net: **0.9408 ± 0.0010** (max 0.9419) | **0.9556** | +0.015 (~15 baseline SDs) |
 | m-nz-cattle (IoU) | ResNet50-U-Net: **0.8107 ± 0.0020** (max 0.8138) | **0.857** ⚠ | +0.046 (65 test images: noisy) |
+| m-brick-kiln (acc.) | ConvNeXt-B, RGB: **0.9887 ± 0.0013** (max 0.991) | **0.983** | **-0.006: below** the best baseline (~ResNet18 level, 0.9823 ± 0.0042) |
+| m-chesapeake (IoU) | ResNet50-U-Net: **0.7112 ± 0.0034** (max 0.7162) | **0.751** | +0.040 (~12 baseline SDs) |
 
 Caveats, all of them material:
 - **Benchmark version**: the baselines ran on classification v0.8.5 / segmentation v0.4; we use v1.0.
@@ -70,8 +76,9 @@ Caveats, all of them material:
   their pv4ger values (~0.94) fit a two-class mean better than panel-only IoU, but that is our inference.
 - **Seeds**: their numbers average 12 seeds; ours is one model (one test look), so a single draw.
 
-Honest summary: on eurosat we match the best baseline, we do not beat it; on both segmentation tasks the
-agent's U-Net + ConvNeXt-tiny clearly exceeds the published ResNet U-Nets.
+Honest summary: on eurosat we match the best baseline, we do not beat it; on m-brick-kiln we are **below** the
+best baseline (a ConvNeXt-**B**; ours is a ConvNeXt-tiny at 128 px chosen from four VALID-tied runs); on all three
+segmentation tasks the agent's U-Net + ConvNeXt-tiny clearly exceeds the published ResNet U-Nets.
 
 ## 2c. Val -> test gap (does our selection overfit VALID?)
 
@@ -80,8 +87,12 @@ agent's U-Net + ConvNeXt-tiny clearly exceeds the published ResNet U-Nets.
 | m-eurosat | 0.987 (ensemble) | 0.979 | **-0.008** | -0.0016 ± 0.0030 |
 | m-pv4ger-seg | 0.9616 | 0.9556 | **-0.006** | -0.0058 ± 0.0009 |
 | m-nz-cattle | 0.860 | 0.857 | **-0.003** | -0.0044 ± 0.0009 |
+| m-brick-kiln | 0.992 | 0.983 | **-0.009** | -0.0046 ± 0.0018 |
+| m-chesapeake | 0.770 | 0.751 | **-0.019** | -0.0154 ± 0.0045 |
 
-Reading: on both segmentation tasks our gap matches the baselines' (no sign of extra overfitting to VALID).
+Reading: on all three segmentation tasks our gap is inside or near the baselines' (chesapeake -0.019 vs
+-0.015 ± 0.005: within one SD; no sign of extra overfitting to VALID). On brick-kiln our gap (-0.009) is about
+twice the baseline's - the same winner's curse as eurosat: the agent picked r016 from four runs tied at 0.992.
 On eurosat our gap is larger than the baselines' typical gap (-0.008 vs -0.002 ± 0.003): picking the top of
 7 runs that were statistically tied on VALID (slide 3) inflates the val score - the winner's curse.
 
@@ -286,7 +297,7 @@ instead of keys. When a bucket exists: `scripts/migrate_store_to_s3.sh` (copy + 
 
 ## Open before the presentation
 
-- [ ] Day-2 results: m-brick-kiln, m-chesapeake (overnight, `scripts/launch_overnight.sh`, after B6)
+- [x] Day-2 results: m-brick-kiln 0.983 acc., m-chesapeake 0.751 mIoU (overnight A8, finalized by the agent)
 - [x] m-nz-cattle result: test 0.857 mIoU, labelled noisy
 - [x] GEO-Bench baselines (slide 2b, cited from the authors' per-seed CSVs) and val->test gaps (2c)
 - [x] S3: organisers want the local layout only (slide 11); no bucket needed
