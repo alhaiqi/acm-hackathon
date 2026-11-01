@@ -9,7 +9,7 @@ Full output: `lebanon_zahle_demo_output.txt`. Preview: `lebanon_zahle_preview.pn
 - **Run 1, default rules: REFUSED** - "input lacks bands the model was trained on: ['B10']".
 - **Run 2, `fill_missing="B10"` (explicit opt-in)**: production ensemble v1-v3 (r003, r007, r004), 289 tiles of
   64 px, 8 s. Warnings raised: B10 filled with the training mean; value range differs on 6 bands (input medians
-  2.5-5.6x the training means: L2A with the +1000 offset vs the L1C training data).
+  2.4-5.6x the training means: L2A with the +1000 offset vs the L1C training data).
 - **Output**: 2-band GeoTIFF (class, confidence %) with the input's CRS/transform. Area: Annual Crop 95.1%,
   Industrial Buildings 2.5%, Highway 2.4%; mean confidence 74%.
 
