@@ -182,6 +182,23 @@ MCP tool `model_receipt`; files in `docs/receipts/m-eurosat/` on branch feature/
 
 ---
 
+## 3d. Run it on a real image: Zahle, Lebanon (P3 `predict_geotiff`, real T4 run, branch feature/extras)
+
+Input: a public Sentinel-2 L2A crop (Earth Search, scene S2B_T37SBT_20240718, 0% cloud, 571 x 572 px, 10 m),
+read anonymously over HTTPS. Model: the m-eurosat production ensemble from the registry (v1-v3).
+
+1. **Default rules: REFUSED** - "input lacks bands the model was trained on: ['B10']" (L2A has no B10).
+2. **Opt-in `fill_missing="B10"`**: a GeoTIFF (class + confidence, same CRS/transform) and a preview in 8 s, with
+   warnings: B10 filled with the training mean; 6 bands 2.4-5.6x outside the training range (L2A vs L1C).
+3. Result: Annual Crop 95%, mean confidence 74%. **Honestly: wrong over the town** - Zahle is labelled crop, not
+   Residential; confidence drops from ~90% on the fields to ~40-60% there.
+
+The point of the slide: the tool says *when not to trust it* before you look at the map - a refusal, then
+explicit warnings, then a confidence layer that is lowest exactly where the map is wrong.
+Evidence: `docs/inference/m-eurosat/` on feature/extras (full output, preview PNG).
+
+---
+
 ## 4. Pretraining that matches the sensor wins
 
 m-eurosat (13-band Sentinel-2), VALID accuracy:
