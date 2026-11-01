@@ -121,4 +121,4 @@ refusal, opt-in fill, warnings; map wrong over the town, flagged by low confiden
 - Decide whether feature/extras is merged to main (your call; I did not merge).
 - Optional: brick-kiln is our one below-baseline task. The agent stopped at ConvNeXt-tiny @128 px; the baseline
   winner is ConvNeXt-B. Nothing more can be done on test (already used); say it honestly on slide 2b.
-- Note: Omar pushed B6i (6f8175f) after A8 started, so A8 ran on B6 up to 030384e.
+- Note: Omar pushed B6i (6f8175f) after A8 started, so A8 ran on main e500751 (B6 through B6h).
