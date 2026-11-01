@@ -21,11 +21,13 @@ from gotrain.inference import STAC_NAMES, predict_geotiff
 STAC = "https://earth-search.aws.element84.com/v1/search"
 
 
-def find_scene(bbox):
-    body = {"collections": ["sentinel-2-l2a"], "bbox": bbox, "datetime": "2024-05-01T00:00:00Z/2024-09-30T00:00:00Z",
+def find_scenes(bbox):
+    """Clearest scenes first. Collection 1 ('sentinel-2-c1-l2a') serves public COGs over HTTPS; the older
+    'sentinel-2-l2a' items now point to a requester-pays bucket, which an anonymous read cannot use."""
+    body = {"collections": ["sentinel-2-c1-l2a"], "bbox": bbox, "datetime": "2024-05-01T00:00:00Z/2024-09-30T00:00:00Z",
             "query": {"eo:cloud_cover": {"lt": 3}}, "limit": 20}
     feats = requests.post(STAC, json=body, timeout=60).json()["features"]
-    return min(feats, key=lambda f: f["properties"]["eo:cloud_cover"])
+    return sorted(feats, key=lambda f: f["properties"]["eo:cloud_cover"])
 
 
 def build_geotiff(item, bbox, out):
@@ -67,13 +69,18 @@ def main():
         import rasterio  # noqa: F401
     except ImportError:
         print(predict_geotiff("none.tif", task=a.task)); return
-    item = find_scene(a.bbox)
     out_dir = config.HOME / "inference"; out_dir.mkdir(parents=True, exist_ok=True)
-    tif = out_dir / f"lebanon_{item['id']}.tif"
     import rasterio
     # public bucket: read anonymously, never with the instance's AWS role (signed requests get AccessDenied)
     with rasterio.Env(AWS_NO_SIGN_REQUEST="YES"):
-        order, shape, crs = build_geotiff(item, a.bbox, tif)
+        for item in find_scenes(a.bbox):
+            tif = out_dir / f"lebanon_{item['id']}.tif"
+            order, shape, crs = build_geotiff(item, a.bbox, tif)
+            with rasterio.open(tif) as ds:
+                empty = float(np.median(ds.read(order.index("B04") + 1))) == 0
+            if not empty:
+                break
+            print(f"scene {item['id']}: no data over the bbox (edge of the satellite pass) - next scene")
     print(f"scene {item['id']} cloud {item['properties']['eo:cloud_cover']}% -> {tif} {shape} {crs} bands {order}")
     print("\n--- 1) default rules ---")
     print(predict_geotiff(str(tif), task=a.task))
