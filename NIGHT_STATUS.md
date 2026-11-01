@@ -70,3 +70,20 @@ Times are UTC (Beirut = UTC+2). Newest entry at the bottom. Questions for Mohamm
   m-chesapeake agent started 21:27 (150 min, expected end ~00:00 UTC).
 - 21:42 Laptop low on memory: Claude Code killed my background waiter (bhjv6f6gc). Per the tool's rule I did not
   auto-restart it; A8 itself is unaffected (runs on SageMaker in a notebook kernel). Checked A8 by hand at 21:42: alive.
+- 23:28 m-chesapeake FINALIZED by the agent: run r012 (U-Net + ConvNeXt-tiny, CE+Dice, TTA), VALID 0.770,
+  **TEST 0.751 mIoU**. 23:29 OVERNIGHT DONE. A8 complete: one test read per task, both by the agent's own
+  finalize_task (no auto-finalize). No other test split touched all night.
+- 02:55 (morning) SageMaker session renewed: new presigned URL generated on the instance (aws sagemaker
+  create-presigned-domain-url, 43200 s session, 300 s expiry), my access switched to it (valid to ~14:56 UTC);
+  a second URL generated last and handed to Mohammed. Nothing was running, so nothing was interrupted.
+- 02:58 check_store_layout.py rerun: LAYOUT OK (local path under STORE_DIR == S3 key), all 5 tasks published:
+  m-brick-kiln, m-chesapeake, m-eurosat, m-nz-cattle, m-pv4ger-seg.
+- 03:05 Baselines (same source as slide 2b, GEO-Bench CSVs at 5a5a763c5b, 1.00x train, 12 seeds):
+  m-brick-kiln best ConvNeXt-B 0.9887 ± 0.0013 -> ours 0.983 is BELOW it (-0.006, about ResNet18 level).
+  m-chesapeake best ResNet50 U-Net 0.7112 ± 0.0034 -> ours 0.751 (+0.040).
+  Val->test gaps: brick-kiln -0.009 (baseline -0.0046 ± 0.0018), chesapeake -0.019 (baseline -0.0154 ± 0.0045).
+  Added to ENGINE_SLIDES on main (12cbe8f): slides 2, 2b, 2c and the open list.
+- 03:00 P3 Lebanon demo attempt 1 failed BEFORE any model ran: GDAL signed the request to the public
+  Sentinel-2 bucket with the instance's role -> AccessDenied. Fix: anonymous read (AWS_NO_SIGN_REQUEST=YES,
+  no credentials, no AWS service touched), 8c9f811. Smoke before the demo: AGENT LOOP OK, ENGINE OK.
+  03:08 demo relaunched on the GPU from a notebook kernel; one light checker (job) running.
